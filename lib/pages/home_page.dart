@@ -9,6 +9,8 @@ import '../models/link.dart';
 import '../services/kioju_api.dart';
 import '../utils/bookmark_export.dart';
 import '../utils/bookmark_import.dart';
+import '../widgets/add_link_dialog.dart';
+import 'link_selection_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -19,10 +21,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchCtrl = TextEditingController();
-  final _urlCtrl = TextEditingController();
-  final _titleCtrl = TextEditingController();
-  final _tagsCtrl = TextEditingController();
-  final _collectionCtrl = TextEditingController();
 
   List<LinkItem> items = [];
 
@@ -120,30 +118,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> _add() async {
-    final url = _urlCtrl.text.trim();
-    if (url.isEmpty) return;
-    final database = await db;
-    await database.insert('links', {
-      'url': url,
-      'title': _titleCtrl.text.trim().isEmpty ? null : _titleCtrl.text.trim(),
-      'tags': _tagsCtrl.text
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .join(','),
-      'collection':
-          _collectionCtrl.text.trim().isEmpty
-              ? null
-              : _collectionCtrl.text.trim(),
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
-    _urlCtrl.clear();
-    _titleCtrl.clear();
-    _tagsCtrl.clear();
-    _collectionCtrl.clear();
-    await _refresh();
-  }
-
   Future<void> _delete(int id) async {
     final database = await db;
     await database.delete('links', where: 'id=?', whereArgs: [id]);
@@ -157,6 +131,7 @@ class _HomePageState extends State<HomePage> {
     );
     final xfile = await openFile(acceptedTypeGroups: [typeGroup]);
     if (xfile == null) return;
+    
     final path = xfile.path;
     final text = await xfile.readAsString();
 
@@ -168,39 +143,109 @@ class _HomePageState extends State<HomePage> {
       imported = importFromChromeJson(jsonDecode(text));
     }
 
+    if (imported.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No links found in the selected file')),
+        );
+      }
+      return;
+    }
+
+    // Convert to selection items and show selection interface
+    final browserLinks = imported.map((bookmark) => 
+        LinkSelectionItem.fromImported(bookmark)).toList();
+
+    // Get current Kioju links for comparison
     final database = await db;
-    final batch = database.batch();
-    for (final it in imported) {
-      batch.insert('links', {
-        'url': it.url,
-        'title': it.title,
-        'tags': it.tags.join(','),
-        'collection': it.collection,
-      }, conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
-    await batch.commit(noResult: true);
+    final existingRows = await database.query('links');
+    final kiojuLinks = existingRows.map((r) => 
+        LinkSelectionItem.fromKioju(LinkItem.fromMap(r))).toList();
+
+    // Show selection dialog
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Imported ${imported.length} links')),
+      final selectedLinks = await Navigator.of(context).push<List<LinkSelectionItem>>(
+        MaterialPageRoute(
+          builder: (_) => LinkSelectionPage(
+            mode: 'import',
+            initialBrowserLinks: browserLinks,
+            initialKiojuLinks: kiojuLinks,
+          ),
+        ),
       );
+
+      if (selectedLinks != null && selectedLinks.isNotEmpty) {
+        // Import selected links
+        final batch = database.batch();
+        for (final item in selectedLinks) {
+          // Only import browser links (non-Kioju links)
+          if (item.remoteId == null) {
+            batch.insert('links', {
+              'url': item.url,
+              'title': item.title == 'Untitled Link' ? null : item.title,
+              'tags': item.tags.join(','),
+              'collection': item.collection,
+            }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }
+        }
+        await batch.commit(noResult: true);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported ${selectedLinks.where((l) => l.remoteId == null).length} links')),
+        );
+        await _refresh();
+      }
     }
-    await _refresh();
   }
 
   Future<void> _export() async {
     final database = await db;
     final rows = await database.query('links');
-    final html = exportToNetscapeHtml(
-      rows.map((r) => LinkItem.fromMap(r)).toList(),
-    );
+    final kiojuLinks = rows.map((r) => 
+        LinkSelectionItem.fromKioju(LinkItem.fromMap(r))).toList();
 
-    final file = await getSaveLocation(suggestedName: 'bookmarks.html');
-    if (file == null) return;
-    await File(file.path).writeAsString(html);
+    if (kiojuLinks.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No links to export')),
+        );
+      }
+      return;
+    }
+
+    // Show selection dialog
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Export complete')));
+      final selectedLinks = await Navigator.of(context).push<List<LinkSelectionItem>>(
+        MaterialPageRoute(
+          builder: (_) => LinkSelectionPage(
+            mode: 'export',
+            initialKiojuLinks: kiojuLinks,
+          ),
+        ),
+      );
+
+      if (selectedLinks != null && selectedLinks.isNotEmpty) {
+        // Convert selected items back to LinkItems for export
+        final linksToExport = selectedLinks.map((item) => LinkItem(
+          id: null,
+          url: item.url,
+          title: item.title == 'Untitled Link' ? null : item.title,
+          tags: item.tags,
+          collection: item.collection,
+          remoteId: item.remoteId,
+          updatedAt: DateTime.now(),
+        )).toList();
+
+        final html = exportToNetscapeHtml(linksToExport);
+
+        final file = await getSaveLocation(suggestedName: 'bookmarks.html');
+        if (file == null) return;
+        
+        await File(file.path).writeAsString(html);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Exported ${selectedLinks.length} links')),
+        );
+      }
     }
   }
 
@@ -365,6 +410,16 @@ class _HomePageState extends State<HomePage> {
               itemBuilder:
                   (context) => [
                     const PopupMenuItem(
+                      value: 'add',
+                      child: Row(
+                        children: [
+                          Icon(Icons.add),
+                          SizedBox(width: 8),
+                          Text('Add Link'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
                       value: 'import',
                       child: Row(
                         children: [
@@ -448,47 +503,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // Add Link Section
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.add_link,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Add New Link',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (isMobile)
-                  ..._buildMobileAddForm()
-                else
-                  ..._buildDesktopAddForm(),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
           // Links List Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -541,7 +555,7 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton:
           isMobile
               ? FloatingActionButton(
-                onPressed: () => _showAddLinkDialog(),
+                onPressed: _showAddLinkDialog,
                 child: const Icon(Icons.add),
               )
               : null,
@@ -562,6 +576,11 @@ class _HomePageState extends State<HomePage> {
   // Helper methods for building UI components
   List<Widget> _buildDesktopActions() {
     return [
+      IconButton(
+        onPressed: _showAddLinkDialog,
+        icon: const Icon(Icons.add),
+        tooltip: 'Add Link',
+      ),
       IconButton(
         onPressed: _import,
         icon: const Icon(Icons.upload_file),
@@ -597,6 +616,9 @@ class _HomePageState extends State<HomePage> {
 
   void _handleMenuAction(String action) {
     switch (action) {
+      case 'add':
+        _showAddLinkDialog();
+        break;
       case 'import':
         _import();
         break;
@@ -621,153 +643,6 @@ class _HomePageState extends State<HomePage> {
             });
         break;
     }
-  }
-
-  List<Widget> _buildMobileAddForm() {
-    return [
-      TextField(
-        controller: _urlCtrl,
-        decoration: InputDecoration(
-          labelText: 'URL',
-          prefixIcon: const Icon(Icons.link),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          filled: true,
-          fillColor: Theme.of(context).colorScheme.surface,
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _titleCtrl,
-        decoration: InputDecoration(
-          labelText: 'Title (optional)',
-          prefixIcon: const Icon(Icons.title),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          filled: true,
-          fillColor: Theme.of(context).colorScheme.surface,
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _tagsCtrl,
-        decoration: InputDecoration(
-          labelText: 'Tags (comma separated)',
-          prefixIcon: const Icon(Icons.tag),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          filled: true,
-          fillColor: Theme.of(context).colorScheme.surface,
-        ),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _collectionCtrl,
-        decoration: InputDecoration(
-          labelText: 'Collection (optional)',
-          prefixIcon: const Icon(Icons.folder),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          filled: true,
-          fillColor: Theme.of(context).colorScheme.surface,
-        ),
-      ),
-      const SizedBox(height: 16),
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _add,
-          icon: const Icon(Icons.add),
-          label: const Text('Add Link'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
-  List<Widget> _buildDesktopAddForm() {
-    return [
-      Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: TextField(
-              controller: _urlCtrl,
-              decoration: InputDecoration(
-                labelText: 'URL',
-                prefixIcon: const Icon(Icons.link),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surface,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: _titleCtrl,
-              decoration: InputDecoration(
-                labelText: 'Title (optional)',
-                prefixIcon: const Icon(Icons.title),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surface,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: _tagsCtrl,
-              decoration: InputDecoration(
-                labelText: 'Tags',
-                prefixIcon: const Icon(Icons.tag),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surface,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: TextField(
-              controller: _collectionCtrl,
-              decoration: InputDecoration(
-                labelText: 'Collection',
-                prefixIcon: const Icon(Icons.folder),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surface,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: _add,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Link'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ];
   }
 
   Widget _buildEmptyState() {
@@ -796,7 +671,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () => _showAddLinkDialog(),
+            onPressed: _showAddLinkDialog,
             icon: const Icon(Icons.add),
             label: const Text('Add Your First Link'),
           ),
@@ -987,27 +862,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showAddLinkDialog() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Add New Link'),
-            content: SizedBox(
-              width: 400,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _buildMobileAddForm(),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
-          ),
-    );
+  void _showAddLinkDialog() async {
+    final result = await showAddLinkDialog(context);
+    if (result != null) {
+      final database = await db;
+      await database.insert('links', {
+        'url': result['url'],
+        'title': result['title'],
+        'tags': (result['tags'] as List<String>).join(','),
+        'notes': result['description'], // Store description in notes field
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      
+      await _refresh();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Link added successfully')),
+        );
+      }
+    }
   }
 
   void _showDeleteConfirmation(int id) {
