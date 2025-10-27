@@ -1,4 +1,5 @@
 import 'package:html/parser.dart' as html_parser;
+import 'security_utils.dart';
 
 class ImportedBookmark {
   final String url;
@@ -14,43 +15,129 @@ class ImportedBookmark {
 }
 
 List<ImportedBookmark> importFromNetscapeHtml(String html) {
-  final doc = html_parser.parse(html);
-  final anchors = doc.querySelectorAll('a[href]');
-  return anchors.map((a) {
-    final href = a.attributes['href']!;
-    final title = a.text.trim();
-    return ImportedBookmark(href, title: title.isNotEmpty ? title : null);
-  }).toList();
-}
+  // Validate HTML content first
+  final validation = SecurityUtils.validateHtmlContent(html);
+  if (!validation.isValid) {
+    throw ArgumentError('Invalid HTML content: ${validation.message}');
+  }
 
-List<ImportedBookmark> importFromChromeJson(Map<String, dynamic> json) {
-  List<ImportedBookmark> out = [];
-  void walk(Map<String, dynamic> node, List<String> path) {
-    final type = node['type'];
-    if (type == 'url') {
-      out.add(
+  try {
+    final doc = html_parser.parse(html);
+    final anchors = doc.querySelectorAll('a[href]');
+    final bookmarks = <ImportedBookmark>[];
+
+    for (final a in anchors) {
+      final href = a.attributes['href'];
+      if (href == null || href.isEmpty) continue;
+
+      // Validate each URL
+      final urlValidation = SecurityUtils.validateUrl(href);
+      if (!urlValidation.isValid) {
+        // Skip invalid URLs instead of failing the entire import
+        continue;
+      }
+
+      final title = a.text.trim();
+      final titleValidation = SecurityUtils.validateTitle(title);
+
+      bookmarks.add(
         ImportedBookmark(
-          node['url'],
-          title: node['name'],
-          collection: path.join('/'),
+          urlValidation.sanitizedValue,
+          title:
+              titleValidation.isValid && titleValidation.sanitizedValue != null
+                  ? titleValidation.sanitizedValue
+                  : null,
         ),
       );
     }
-    final children = node['children'];
-    if (children is List) {
-      final nextPath =
-          (type == 'folder' && node['name'] != null)
-              ? [...path, node['name'] as String]
-              : path;
-      for (final c in children) {
-        walk(Map<String, dynamic>.from(c), nextPath);
+
+    return bookmarks;
+  } catch (e) {
+    throw Exception('Failed to parse HTML bookmarks: $e');
+  }
+}
+
+List<ImportedBookmark> importFromChromeJson(Map<String, dynamic> json) {
+  final bookmarks = <ImportedBookmark>[];
+
+  void walk(Map<String, dynamic> node, List<String> path) {
+    try {
+      final type = node['type'];
+      if (type == 'url') {
+        final url = node['url'];
+        if (url is String) {
+          // Validate URL
+          final urlValidation = SecurityUtils.validateUrl(url);
+          if (!urlValidation.isValid) {
+            // Skip invalid URLs
+            return;
+          }
+
+          final name = node['name'];
+          final title = name is String ? name : null;
+          final titleValidation = SecurityUtils.validateTitle(title);
+
+          // Validate collection path
+          final collection = path.join('/');
+          final collectionValidation = SecurityUtils.validateTitle(collection);
+
+          bookmarks.add(
+            ImportedBookmark(
+              urlValidation.sanitizedValue,
+              title:
+                  titleValidation.isValid &&
+                          titleValidation.sanitizedValue != null
+                      ? titleValidation.sanitizedValue
+                      : null,
+              collection:
+                  collectionValidation.isValid &&
+                          collectionValidation.sanitizedValue != null
+                      ? collectionValidation.sanitizedValue
+                      : null,
+            ),
+          );
+        }
       }
+
+      final children = node['children'];
+      if (children is List) {
+        // Validate folder name
+        final nodeName = node['name'];
+        final folderName = nodeName is String ? nodeName : null;
+        final nameValidation = SecurityUtils.validateTitle(folderName);
+
+        final nextPath =
+            (type == 'folder' &&
+                    nameValidation.isValid &&
+                    nameValidation.sanitizedValue != null)
+                ? [...path, nameValidation.sanitizedValue!]
+                : path;
+
+        for (final c in children) {
+          if (c is Map<String, dynamic>) {
+            walk(c, List<String>.from(nextPath));
+          }
+        }
+      }
+    } catch (e) {
+      // Skip nodes that cause errors instead of failing the entire import
+      return;
     }
   }
 
-  final roots = Map<String, dynamic>.from(json['roots'] ?? {});
-  for (final key in roots.keys) {
-    walk(Map<String, dynamic>.from(roots[key]), [key]);
+  try {
+    final roots = json['roots'];
+    if (roots is Map<String, dynamic>) {
+      for (final key in roots.keys) {
+        final root = roots[key];
+        if (root is Map<String, dynamic>) {
+          walk(root, [key]);
+        }
+      }
+    }
+  } catch (e) {
+    throw Exception('Failed to parse Chrome JSON bookmarks: $e');
   }
-  return out;
+
+  return bookmarks;
 }

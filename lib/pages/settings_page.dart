@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/kioju_api.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -64,7 +65,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
               child: Column(
@@ -164,10 +167,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         final t = _tokenCtrl.text.trim();
+                        final primaryColor =
+                            Theme.of(context).colorScheme.primary;
+                        final scaffoldMessenger = ScaffoldMessenger.of(context);
                         await KiojuApi.setToken(t.isEmpty ? null : t);
 
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: const Row(
                                 children: [
@@ -176,8 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                   Text('API token saved successfully'),
                                 ],
                               ),
-                              backgroundColor:
-                                  Theme.of(context).colorScheme.primary,
+                              backgroundColor: primaryColor,
                             ),
                           );
                         }
@@ -206,7 +211,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.2),
                 ),
               ),
               child: Column(
@@ -230,11 +237,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  _buildHelpItem(
+                  _buildClickableHelpItem(
                     context,
                     Icons.info_outline,
                     'About Kioju',
-                    'Kioju is a personal link management service',
+                    'Visit the Kioju website to learn more',
+                    'https://kioju.de',
                   ),
                   const SizedBox(height: 12),
                   _buildHelpItem(
@@ -294,5 +302,79 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildClickableHelpItem(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String description,
+    String url,
+  ) {
+    return InkWell(
+      onTap: () => _launchUrl(url),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.open_in_new,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    try {
+      final uri = Uri.parse(urlString);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open $urlString'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening link: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 }

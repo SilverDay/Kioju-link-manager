@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
@@ -7,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../db.dart';
 import '../models/link.dart';
 import '../services/kioju_api.dart';
-import '../utils/bookmark_export.dart';
 import '../utils/bookmark_import.dart';
 import '../widgets/add_link_dialog.dart';
 import 'link_selection_page.dart';
@@ -168,9 +166,7 @@ class _HomePageState extends State<HomePage> {
 
     // Show selection dialog
     if (mounted) {
-      final result = await Navigator.of(
-        context,
-      ).push<Map<String, dynamic>>(
+      await Navigator.of(context).push<Map<String, dynamic>>(
         MaterialPageRoute(
           builder:
               (_) => LinkSelectionPage(
@@ -180,32 +176,8 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      if (result != null && result['action'] == 'import') {
-        final selectedLinks = result['links'] as List<LinkSelectionItem>;
-        // Import selected browser links
-        final batch = database.batch();
-        for (final item in selectedLinks) {
-          // Only import browser links (non-Kioju links)
-          if (item.remoteId == null) {
-            batch.insert('links', {
-              'url': item.url,
-              'title': item.title == 'Untitled Link' ? null : item.title,
-              'tags': item.tags.join(','),
-              'collection': item.collection,
-            }, conflictAlgorithm: ConflictAlgorithm.ignore);
-          }
-        }
-        await batch.commit(noResult: true);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Imported ${selectedLinks.where((l) => l.remoteId == null).length} links',
-            ),
-          ),
-        );
-        await _refresh();
-      }
+      // Always refresh when returning from link selection
+      await _refresh();
     }
   }
 
@@ -228,50 +200,34 @@ class _HomePageState extends State<HomePage> {
 
     // Show selection dialog
     if (mounted) {
-      final result = await Navigator.of(
-        context,
-      ).push<Map<String, dynamic>>(
+      await Navigator.of(context).push<Map<String, dynamic>>(
         MaterialPageRoute(
-          builder:
-              (_) => LinkSelectionPage(
-                initialKiojuLinks: kiojuLinks,
-              ),
+          builder: (_) => LinkSelectionPage(initialKiojuLinks: kiojuLinks),
         ),
       );
 
-      if (result != null && result['action'] == 'export') {
-        final selectedLinks = result['links'] as List<LinkSelectionItem>;
-        // Convert selected items back to LinkItems for export
-        final linksToExport =
-            selectedLinks
-                .map(
-                  (item) => LinkItem(
-                    id: null,
-                    url: item.url,
-                    title: item.title == 'Untitled Link' ? null : item.title,
-                    tags: item.tags,
-                    collection: item.collection,
-                    remoteId: item.remoteId,
-                    updatedAt: DateTime.now(),
-                  ),
-                )
-                .toList();
-
-        final html = exportToNetscapeHtml(linksToExport);
-
-        final file = await getSaveLocation(suggestedName: 'bookmarks.html');
-        if (file == null) return;
-
-        await File(file.path).writeAsString(html);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Exported ${selectedLinks.length} links')),
-        );
-      }
+      // Always refresh when returning from link selection
+      await _refresh();
     }
   }
 
   Future<void> _pull() async {
     try {
+      // Check rate limit status before making the request
+      final rateLimitStatus = KiojuApi.getRateLimitStatus();
+      if (!rateLimitStatus['canMakeRequest']) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(rateLimitStatus['message']),
+              duration: const Duration(seconds: 5),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
       final remote = await KiojuApi.listLinks(limit: 200, offset: 0);
       final database = await db;
       final batch = database.batch();
@@ -302,6 +258,53 @@ class _HomePageState extends State<HomePage> {
         );
       }
       await _refresh();
+    } on RateLimitException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            duration: const Duration(seconds: 8),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(label: 'OK', onPressed: () {}),
+          ),
+        );
+      }
+    } on AuthenticationException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            duration: const Duration(seconds: 8),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+              },
+            ),
+          ),
+        );
+      }
+    } on AuthorizationException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            duration: const Duration(seconds: 8),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+              },
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -354,11 +357,30 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _push() async {
+    // Check rate limit status before making requests
+    final rateLimitStatus = KiojuApi.getRateLimitStatus();
+    if (!rateLimitStatus['canMakeRequest']) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(rateLimitStatus['message']),
+            duration: const Duration(seconds: 5),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     final database = await db;
     final rows = await database.query('links', where: 'remote_id IS NULL');
     int ok = 0;
+    int failed = 0;
+    String? lastError;
+
     for (final r in rows) {
       try {
+        final isPrivate = (r['is_private'] as int? ?? 0) == 1;
         final res = await KiojuApi.addLink(
           url: r['url'] as String,
           title: r['title'] as String?,
@@ -367,6 +389,7 @@ class _HomePageState extends State<HomePage> {
                   .split(',')
                   .where((e) => e.isNotEmpty)
                   .toList(),
+          isPrivate: isPrivate ? '1' : '0',
         );
         final id = (res['id'] ?? res['remote_id'] ?? '').toString();
         if (id.isNotEmpty) {
@@ -378,14 +401,63 @@ class _HomePageState extends State<HomePage> {
           );
           ok++;
         }
-      } catch (_) {
-        // ignore in MVP
+      } on RateLimitException catch (e) {
+        // Stop processing if rate limited
+        lastError = e.message;
+        break;
+      } on AuthenticationException catch (e) {
+        lastError = e.message;
+        break;
+      } on AuthorizationException catch (e) {
+        lastError = e.message;
+        break;
+      } catch (e) {
+        failed++;
+        lastError = e.toString();
+        // Continue processing other links
       }
     }
+
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Pushed $ok links')));
+      if (lastError != null &&
+          (lastError.contains('Rate limited') ||
+              lastError.contains('Invalid') ||
+              lastError.contains('forbidden'))) {
+        // Show specific error for auth/rate limit issues
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(lastError),
+            duration: const Duration(seconds: 8),
+            backgroundColor:
+                lastError.contains('Rate limited') ? Colors.orange : Colors.red,
+            action:
+                lastError.contains('Rate limited')
+                    ? null
+                    : SnackBarAction(
+                      label: 'Settings',
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+          ),
+        );
+      } else {
+        // Show success/failure summary
+        String message = 'Pushed $ok links';
+        if (failed > 0) {
+          message += ', $failed failed';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: failed > 0 ? Colors.orange : null,
+          ),
+        );
+      }
     }
     await _refresh();
   }
@@ -708,11 +780,11 @@ class _HomePageState extends State<HomePage> {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         ),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -892,6 +964,8 @@ class _HomePageState extends State<HomePage> {
         'title': result['title'],
         'tags': (result['tags'] as List<String>).join(','),
         'notes': result['description'], // Store description in notes field
+        'is_private':
+            result['isPrivate'] == true ? 1 : 0, // Store privacy setting
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
 
       await _refresh();

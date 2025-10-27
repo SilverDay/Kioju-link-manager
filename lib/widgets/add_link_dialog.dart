@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/security_utils.dart';
 
 class AddLinkDialog extends StatefulWidget {
   const AddLinkDialog({super.key});
@@ -14,6 +15,7 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
   final _descriptionController = TextEditingController();
   final _tagsController = TextEditingController();
   bool _isValidatingUrl = false;
+  bool _isPrivate = false;
 
   @override
   void dispose() {
@@ -46,20 +48,8 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
   }
 
   String? _validateUrlField(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'URL is required';
-    }
-
-    try {
-      final uri = Uri.parse(value.trim());
-      if (!uri.hasScheme || (!uri.scheme.startsWith('http'))) {
-        return 'Please enter a valid URL (starting with http:// or https://)';
-      }
-    } catch (e) {
-      return 'Please enter a valid URL';
-    }
-
-    return null;
+    final validation = SecurityUtils.validateUrl(value);
+    return validation.isValid ? null : validation.message;
   }
 
   bool _isUrlValid(String url) {
@@ -215,6 +205,59 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                 onFieldSubmitted: (_) => _handleSubmit(),
               ),
 
+              const SizedBox(height: 16),
+
+              // Private Checkbox
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Privacy Setting',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Private links are only visible to you',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _isPrivate,
+                      onChanged: (value) => setState(() => _isPrivate = value),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 24),
 
               // Preview Section (if URL is valid)
@@ -228,7 +271,7 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                     border: Border.all(
                       color: Theme.of(
                         context,
-                      ).colorScheme.outline.withOpacity(0.2),
+                      ).colorScheme.outline.withValues(alpha: 0.2),
                     ),
                   ),
                   child: Column(
@@ -364,17 +407,54 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
 
   void _handleSubmit() {
     if (_formKey.currentState?.validate() == true) {
+      // Validate all inputs with security utils
+      final urlValidation = SecurityUtils.validateUrl(_urlController.text);
+      final titleValidation = SecurityUtils.validateTitle(
+        _titleController.text,
+      );
+      final notesValidation = SecurityUtils.validateNotes(
+        _descriptionController.text,
+      );
+      final tagsValidation = SecurityUtils.validateTags(
+        _parseTagsInput(_tagsController.text),
+      );
+
+      if (!urlValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid URL: ${urlValidation.message}')),
+        );
+        return;
+      }
+
+      if (!titleValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid title: ${titleValidation.message}')),
+        );
+        return;
+      }
+
+      if (!notesValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid description: ${notesValidation.message}'),
+          ),
+        );
+        return;
+      }
+
+      if (!tagsValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid tags: ${tagsValidation.message}')),
+        );
+        return;
+      }
+
       final result = {
-        'url': _urlController.text.trim(),
-        'title':
-            _titleController.text.trim().isEmpty
-                ? null
-                : _titleController.text.trim(),
-        'description':
-            _descriptionController.text.trim().isEmpty
-                ? null
-                : _descriptionController.text.trim(),
-        'tags': _parseTagsInput(_tagsController.text),
+        'url': urlValidation.sanitizedValue,
+        'title': titleValidation.sanitizedValue,
+        'description': notesValidation.sanitizedValue,
+        'tags': tagsValidation.sanitizedValue ?? <String>[],
+        'isPrivate': _isPrivate,
       };
 
       Navigator.of(context).pop(result);
