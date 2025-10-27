@@ -25,6 +25,9 @@ jobs:
     - name: Enable Windows desktop
       run: flutter config --enable-windows-desktop
       
+    - name: Create Windows platform support
+      run: flutter create --platforms=windows .
+      
     - name: Install dependencies
       run: flutter pub get
       
@@ -63,6 +66,9 @@ jobs:
         
     - name: Enable macOS desktop
       run: flutter config --enable-macos-desktop
+      
+    - name: Create macOS platform support
+      run: flutter create --platforms=macos .
       
     - name: Install dependencies
       run: flutter pub get
