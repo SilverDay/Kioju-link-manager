@@ -44,7 +44,7 @@ class LinkSelectionItem {
     final title = (response['title'] ?? url) as String;
     final tags = _parseTagsFromApi(response['tags']);
     final remoteId = (response['id'] ?? response['remote_id'] ?? '').toString();
-    
+
     return LinkSelectionItem(
       url: url,
       title: title,
@@ -84,13 +84,11 @@ class LinkSelectionItem {
 }
 
 class LinkSelectionPage extends StatefulWidget {
-  final String mode; // 'import' or 'export'
   final List<LinkSelectionItem>? initialBrowserLinks;
   final List<LinkSelectionItem>? initialKiojuLinks;
 
   const LinkSelectionPage({
     super.key,
-    required this.mode,
     this.initialBrowserLinks,
     this.initialKiojuLinks,
   });
@@ -110,18 +108,20 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     super.initState();
     browserLinks = widget.initialBrowserLinks ?? [];
     kiojuLinks = widget.initialKiojuLinks ?? [];
-    
-    if (widget.mode == 'export' && kiojuLinks.isEmpty) {
+
+    // Always load Kioju links if not provided
+    if (kiojuLinks.isEmpty) {
       _loadKiojuLinks();
     }
   }
 
   Future<void> _loadKiojuLinks() async {
     setState(() => isLoading = true);
-    
+
     try {
       final remote = await KiojuApi.listLinks(limit: 500, offset: 0);
-      final items = remote.map((m) => LinkSelectionItem.fromApiResponse(m)).toList();
+      final items =
+          remote.map((m) => LinkSelectionItem.fromApiResponse(m)).toList();
       setState(() {
         kiojuLinks = items;
       });
@@ -138,18 +138,30 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
 
   List<LinkSelectionItem> get filteredBrowserLinks {
     if (searchQuery.isEmpty) return browserLinks;
-    return browserLinks.where((link) =>
-      link.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-      link.url.toLowerCase().contains(searchQuery.toLowerCase()) ||
-      link.tags.any((tag) => tag.toLowerCase().contains(searchQuery.toLowerCase()))).toList();
+    return browserLinks
+        .where(
+          (link) =>
+              link.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              link.url.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              link.tags.any(
+                (tag) => tag.toLowerCase().contains(searchQuery.toLowerCase()),
+              ),
+        )
+        .toList();
   }
 
   List<LinkSelectionItem> get filteredKiojuLinks {
     if (searchQuery.isEmpty) return kiojuLinks;
-    return kiojuLinks.where((link) =>
-      link.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-      link.url.toLowerCase().contains(searchQuery.toLowerCase()) ||
-      link.tags.any((tag) => tag.toLowerCase().contains(searchQuery.toLowerCase()))).toList();
+    return kiojuLinks
+        .where(
+          (link) =>
+              link.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              link.url.toLowerCase().contains(searchQuery.toLowerCase()) ||
+              link.tags.any(
+                (tag) => tag.toLowerCase().contains(searchQuery.toLowerCase()),
+              ),
+        )
+        .toList();
   }
 
   @override
@@ -163,18 +175,10 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
         elevation: 0,
         backgroundColor: Theme.of(context).colorScheme.surface,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
-        title: Text(
-          widget.mode == 'import' ? 'Select Links to Import' : 'Select Links to Export',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+        title: const Text(
+          'Link Management',
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: _getSelectedLinks().isEmpty ? null : _handleConfirm,
-            icon: Icon(widget.mode == 'import' ? Icons.download : Icons.upload),
-            label: Text(widget.mode == 'import' ? 'Import Selected' : 'Export Selected'),
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Column(
         children: [
@@ -205,7 +209,7 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
             ),
           ),
 
-          // Selection Summary
+          // Info Card
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(16),
@@ -220,11 +224,13 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                   color: Theme.of(context).colorScheme.onPrimaryContainer,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  '${_getSelectedLinks().length} links selected for ${widget.mode}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w500,
+                Expanded(
+                  child: Text(
+                    'Select links and use the "Copy to" buttons to transfer between browser bookmarks and Kioju',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -262,8 +268,66 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
           Expanded(
             child: TabBarView(
               children: [
-                _buildLinkList(filteredBrowserLinks, 'browser'),
-                _buildLinkList(filteredKiojuLinks, 'kioju'),
+                Column(
+                  children: [
+                    Expanded(child: _buildLinkList(filteredBrowserLinks, 'browser')),
+                    if (_getSelectedBrowserLinks().isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                          border: Border(
+                            top: BorderSide(
+                              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                            ),
+                          ),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _copyBrowserLinksToKioju,
+                            icon: const Icon(Icons.arrow_forward),
+                            label: Text('Copy ${_getSelectedBrowserLinks().length} to Kioju'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    Expanded(
+                      child: isLoading && kiojuLinks.isEmpty
+                          ? const Center(child: CircularProgressIndicator())
+                          : _buildLinkList(filteredKiojuLinks, 'kioju'),
+                    ),
+                    if (_getSelectedKiojuLinks().isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                          border: Border(
+                            top: BorderSide(
+                              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                            ),
+                          ),
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _copyKiojuLinksToBookmarks,
+                            icon: const Icon(Icons.arrow_back),
+                            label: Text('Copy ${_getSelectedKiojuLinks().length} to Bookmarks'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -280,12 +344,17 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHigh,
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withOpacity(0.2),
                     ),
                   ),
                 ),
@@ -324,9 +393,31 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                   ],
                 ),
               ),
-              Expanded(
-                child: _buildLinkList(filteredBrowserLinks, 'browser'),
-              ),
+              Expanded(child: _buildLinkList(filteredBrowserLinks, 'browser')),
+              // Copy to Kioju button
+              if (_getSelectedBrowserLinks().isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      ),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _copyBrowserLinksToKioju,
+                      icon: const Icon(Icons.arrow_forward),
+                      label: Text('Copy ${_getSelectedBrowserLinks().length} to Kioju'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -342,12 +433,17 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
           child: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHigh,
                   border: Border(
                     bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withOpacity(0.2),
                     ),
                   ),
                 ),
@@ -387,10 +483,35 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                 ),
               ),
               Expanded(
-                child: isLoading && kiojuLinks.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
-                    : _buildLinkList(filteredKiojuLinks, 'kioju'),
+                child:
+                    isLoading && kiojuLinks.isEmpty
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildLinkList(filteredKiojuLinks, 'kioju'),
               ),
+              // Copy to Bookmarks button  
+              if (_getSelectedKiojuLinks().isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      ),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _copyKiojuLinksToBookmarks,
+                      icon: const Icon(Icons.arrow_back),
+                      label: Text('Copy ${_getSelectedKiojuLinks().length} to Bookmarks'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -411,7 +532,9 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              source == 'browser' ? 'No browser links loaded' : 'No Kioju links found',
+              source == 'browser'
+                  ? 'No browser links loaded'
+                  : 'No Kioju links found',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -432,14 +555,18 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: item.isSelected 
-            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-            : Theme.of(context).colorScheme.surface,
+        color:
+            item.isSelected
+                ? Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withOpacity(0.3)
+                : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: item.isSelected 
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          color:
+              item.isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.outline.withOpacity(0.2),
         ),
       ),
       child: CheckboxListTile(
@@ -451,9 +578,9 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
         },
         title: Text(
           item.title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -472,20 +599,35 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
               const SizedBox(height: 4),
               Wrap(
                 spacing: 4,
-                children: item.tags.take(3).map((tag) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    tag,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Theme.of(context).colorScheme.onSecondaryContainer,
-                    ),
-                  ),
-                )).toList(),
+                children:
+                    item.tags
+                        .take(3)
+                        .map(
+                          (tag) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              tag,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
               ),
             ],
           ],
@@ -511,12 +653,31 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     });
   }
 
-  List<LinkSelectionItem> _getSelectedLinks() {
-    return [...browserLinks, ...kiojuLinks].where((link) => link.isSelected).toList();
+  List<LinkSelectionItem> _getSelectedBrowserLinks() {
+    return browserLinks.where((link) => link.isSelected).toList();
   }
 
-  void _handleConfirm() {
-    final selectedLinks = _getSelectedLinks();
-    Navigator.of(context).pop(selectedLinks);
+  List<LinkSelectionItem> _getSelectedKiojuLinks() {
+    return kiojuLinks.where((link) => link.isSelected).toList();
+  }
+
+  Future<void> _copyBrowserLinksToKioju() async {
+    final selectedLinks = _getSelectedBrowserLinks();
+    if (selectedLinks.isEmpty) return;
+
+    Navigator.of(context).pop({
+      'action': 'import',
+      'links': selectedLinks,
+    });
+  }
+
+  Future<void> _copyKiojuLinksToBookmarks() async {
+    final selectedLinks = _getSelectedKiojuLinks();
+    if (selectedLinks.isEmpty) return;
+
+    Navigator.of(context).pop({
+      'action': 'export',
+      'links': selectedLinks,
+    });
   }
 }

@@ -131,7 +131,7 @@ class _HomePageState extends State<HomePage> {
     );
     final xfile = await openFile(acceptedTypeGroups: [typeGroup]);
     if (xfile == null) return;
-    
+
     final path = xfile.path;
     final text = await xfile.readAsString();
 
@@ -153,29 +153,36 @@ class _HomePageState extends State<HomePage> {
     }
 
     // Convert to selection items and show selection interface
-    final browserLinks = imported.map((bookmark) => 
-        LinkSelectionItem.fromImported(bookmark)).toList();
+    final browserLinks =
+        imported
+            .map((bookmark) => LinkSelectionItem.fromImported(bookmark))
+            .toList();
 
     // Get current Kioju links for comparison
     final database = await db;
     final existingRows = await database.query('links');
-    final kiojuLinks = existingRows.map((r) => 
-        LinkSelectionItem.fromKioju(LinkItem.fromMap(r))).toList();
+    final kiojuLinks =
+        existingRows
+            .map((r) => LinkSelectionItem.fromKioju(LinkItem.fromMap(r)))
+            .toList();
 
     // Show selection dialog
     if (mounted) {
-      final selectedLinks = await Navigator.of(context).push<List<LinkSelectionItem>>(
+      final result = await Navigator.of(
+        context,
+      ).push<Map<String, dynamic>>(
         MaterialPageRoute(
-          builder: (_) => LinkSelectionPage(
-            mode: 'import',
-            initialBrowserLinks: browserLinks,
-            initialKiojuLinks: kiojuLinks,
-          ),
+          builder:
+              (_) => LinkSelectionPage(
+                initialBrowserLinks: browserLinks,
+                initialKiojuLinks: kiojuLinks,
+              ),
         ),
       );
 
-      if (selectedLinks != null && selectedLinks.isNotEmpty) {
-        // Import selected links
+      if (result != null && result['action'] == 'import') {
+        final selectedLinks = result['links'] as List<LinkSelectionItem>;
+        // Import selected browser links
         final batch = database.batch();
         for (final item in selectedLinks) {
           // Only import browser links (non-Kioju links)
@@ -189,9 +196,13 @@ class _HomePageState extends State<HomePage> {
           }
         }
         await batch.commit(noResult: true);
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Imported ${selectedLinks.where((l) => l.remoteId == null).length} links')),
+          SnackBar(
+            content: Text(
+              'Imported ${selectedLinks.where((l) => l.remoteId == null).length} links',
+            ),
+          ),
         );
         await _refresh();
       }
@@ -201,46 +212,56 @@ class _HomePageState extends State<HomePage> {
   Future<void> _export() async {
     final database = await db;
     final rows = await database.query('links');
-    final kiojuLinks = rows.map((r) => 
-        LinkSelectionItem.fromKioju(LinkItem.fromMap(r))).toList();
+    final kiojuLinks =
+        rows
+            .map((r) => LinkSelectionItem.fromKioju(LinkItem.fromMap(r)))
+            .toList();
 
     if (kiojuLinks.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No links to export')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No links to export')));
       }
       return;
     }
 
     // Show selection dialog
     if (mounted) {
-      final selectedLinks = await Navigator.of(context).push<List<LinkSelectionItem>>(
+      final result = await Navigator.of(
+        context,
+      ).push<Map<String, dynamic>>(
         MaterialPageRoute(
-          builder: (_) => LinkSelectionPage(
-            mode: 'export',
-            initialKiojuLinks: kiojuLinks,
-          ),
+          builder:
+              (_) => LinkSelectionPage(
+                initialKiojuLinks: kiojuLinks,
+              ),
         ),
       );
 
-      if (selectedLinks != null && selectedLinks.isNotEmpty) {
+      if (result != null && result['action'] == 'export') {
+        final selectedLinks = result['links'] as List<LinkSelectionItem>;
         // Convert selected items back to LinkItems for export
-        final linksToExport = selectedLinks.map((item) => LinkItem(
-          id: null,
-          url: item.url,
-          title: item.title == 'Untitled Link' ? null : item.title,
-          tags: item.tags,
-          collection: item.collection,
-          remoteId: item.remoteId,
-          updatedAt: DateTime.now(),
-        )).toList();
+        final linksToExport =
+            selectedLinks
+                .map(
+                  (item) => LinkItem(
+                    id: null,
+                    url: item.url,
+                    title: item.title == 'Untitled Link' ? null : item.title,
+                    tags: item.tags,
+                    collection: item.collection,
+                    remoteId: item.remoteId,
+                    updatedAt: DateTime.now(),
+                  ),
+                )
+                .toList();
 
         final html = exportToNetscapeHtml(linksToExport);
 
         final file = await getSaveLocation(suggestedName: 'bookmarks.html');
         if (file == null) return;
-        
+
         await File(file.path).writeAsString(html);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Exported ${selectedLinks.length} links')),
@@ -872,9 +893,9 @@ class _HomePageState extends State<HomePage> {
         'tags': (result['tags'] as List<String>).join(','),
         'notes': result['description'], // Store description in notes field
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      
+
       await _refresh();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Link added successfully')),

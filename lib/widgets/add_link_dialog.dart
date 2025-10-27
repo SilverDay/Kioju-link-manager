@@ -129,21 +129,23 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                   labelText: 'URL *',
                   hintText: 'https://example.com',
                   prefixIcon: const Icon(Icons.link),
-                  suffixIcon: _isValidatingUrl
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : null,
+                  suffixIcon:
+                      _isValidatingUrl
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                          : null,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
                 validator: _validateUrlField,
                 onChanged: (_) => _autoFillFromUrl(),
@@ -163,7 +165,8 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
                 textInputAction: TextInputAction.next,
               ),
@@ -185,7 +188,8 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
                 textInputAction: TextInputAction.next,
               ),
@@ -203,7 +207,8 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  fillColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
                   helperText: 'Separate multiple tags with commas',
                 ),
                 textInputAction: TextInputAction.done,
@@ -213,14 +218,17 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
               const SizedBox(height: 24),
 
               // Preview Section (if URL is valid)
-              if (_urlController.text.isNotEmpty && _isUrlValid(_urlController.text)) ...[
+              if (_urlController.text.isNotEmpty &&
+                  _isUrlValid(_urlController.text)) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outline.withOpacity(0.2),
                     ),
                   ),
                   child: Column(
@@ -228,7 +236,9 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                     children: [
                       Text(
                         'Preview',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -239,13 +249,19 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer,
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Icon(
                               Icons.link,
                               size: 16,
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -257,14 +273,16 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                                   _titleController.text.isNotEmpty
                                       ? _titleController.text
                                       : 'Untitled Link',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
                                 Text(
                                   _urlController.text,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -278,21 +296,35 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                         Wrap(
                           spacing: 6,
                           runSpacing: 4,
-                          children: _parseTagsInput(_tagsController.text).map((tag) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              tag,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSecondaryContainer,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          )).toList(),
+                          children:
+                              _parseTagsInput(_tagsController.text)
+                                  .map(
+                                    (tag) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.secondaryContainer,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        tag,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color:
+                                              Theme.of(context)
+                                                  .colorScheme
+                                                  .onSecondaryContainer,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                         ),
                       ],
                     ],
@@ -334,11 +366,17 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
     if (_formKey.currentState?.validate() == true) {
       final result = {
         'url': _urlController.text.trim(),
-        'title': _titleController.text.trim().isEmpty ? null : _titleController.text.trim(),
-        'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+        'title':
+            _titleController.text.trim().isEmpty
+                ? null
+                : _titleController.text.trim(),
+        'description':
+            _descriptionController.text.trim().isEmpty
+                ? null
+                : _descriptionController.text.trim(),
         'tags': _parseTagsInput(_tagsController.text),
       };
-      
+
       Navigator.of(context).pop(result);
     }
   }
