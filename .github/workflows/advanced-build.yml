@@ -1,0 +1,188 @@
+name: Advanced Build & Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_installer:
+        description: 'Create installers (Windows MSI, macOS DMG)'
+        required: false
+        default: 'false'
+        type: boolean
+      upload_to_release:
+        description: 'Upload to latest release'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  advanced-build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Analyze code
+      run: flutter analyze
+      
+    - name: Run tests
+      run: flutter test
+      
+    - name: Build Windows app
+      run: flutter build windows --release --verbose
+      
+    - name: Setup MSBuild (for advanced Windows packaging)
+      if: ${{ github.event.inputs.create_installer == 'true' }}
+      uses: microsoft/setup-msbuild@v2
+      
+    - name: Install Advanced Installer (optional)
+      if: ${{ github.event.inputs.create_installer == 'true' }}
+      run: |
+        # Download and install Advanced Installer
+        # This is optional - you can use other tools like WiX, NSIS, or Inno Setup
+        echo "Would install Advanced Installer here for MSI creation"
+        
+    - name: Create Windows portable ZIP
+      run: |
+        cd build/windows/x64/runner/Release
+        Compress-Archive -Path * -DestinationPath ../../../../../kioju-link-manager-windows-portable.zip
+        
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kioju-windows-advanced
+        path: |
+          kioju-link-manager-windows-portable.zip
+          build/windows/x64/runner/Release/
+        retention-days: 90
+
+  advanced-build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Enable macOS desktop
+      run: flutter config --enable-macos-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Analyze code
+      run: flutter analyze
+      
+    - name: Run tests
+      run: flutter test
+      
+    - name: Build macOS app
+      run: flutter build macos --release --verbose
+      
+    - name: Install create-dmg
+      if: ${{ github.event.inputs.create_installer == 'true' }}
+      run: brew install create-dmg
+      
+    - name: Create DMG installer
+      if: ${{ github.event.inputs.create_installer == 'true' }}
+      run: |
+        cd build/macos/Build/Products/Release
+        create-dmg \
+          --volname "Kioju Link Manager" \
+          --volicon "../../../../assets/icon.icns" \
+          --window-pos 200 120 \
+          --window-size 800 450 \
+          --icon-size 100 \
+          --icon "kioju_link_manager_flutter.app" 200 190 \
+          --hide-extension "kioju_link_manager_flutter.app" \
+          --app-drop-link 600 185 \
+          "../../../../../kioju-link-manager-macos.dmg" \
+          "kioju_link_manager_flutter.app"
+          
+    - name: Create macOS ZIP (always)
+      run: |
+        cd build/macos/Build/Products/Release
+        zip -r ../../../../../kioju-link-manager-macos.zip kioju_link_manager_flutter.app
+        
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kioju-macos-advanced
+        path: |
+          kioju-link-manager-macos.zip
+          kioju-link-manager-macos.dmg
+        retention-days: 90
+
+  code-signing-macos:
+    runs-on: macos-latest
+    needs: advanced-build-macos
+    if: ${{ github.event.inputs.create_installer == 'true' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download macOS build
+      uses: actions/download-artifact@v4
+      with:
+        name: kioju-macos-advanced
+        
+    - name: Setup code signing (placeholder)
+      run: |
+        echo "Code signing setup would go here"
+        echo "You would need to add your Apple Developer certificates"
+        echo "to GitHub secrets and configure signing here"
+        # Example:
+        # echo "${{ secrets.MACOS_CERTIFICATE }}" | base64 --decode > certificate.p12
+        # security create-keychain -p "" build.keychain
+        # security import certificate.p12 -k build.keychain -P "${{ secrets.MACOS_CERTIFICATE_PWD }}" -T /usr/bin/codesign
+        # security set-keychain-settings -t 3600 -u build.keychain
+        # codesign --force --sign "${{ secrets.MACOS_CERTIFICATE_NAME }}" kioju_link_manager_flutter.app
+
+  quality-checks:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run Flutter analyzer
+      run: flutter analyze --fatal-infos
+      
+    - name: Check formatting
+      run: dart format --set-exit-if-changed .
+      
+    - name: Run tests with coverage
+      run: flutter test --coverage
+      
+    - name: Upload coverage to Codecov (optional)
+      # uses: codecov/codecov-action@v3
+      # with:
+      #   file: coverage/lcov.info
+      run: echo "Coverage upload would go here"

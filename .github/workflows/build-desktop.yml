@@ -1,0 +1,135 @@
+name: Build Desktop Apps
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run tests
+      run: flutter test
+      
+    - name: Build Windows app
+      run: flutter build windows --release
+      
+    - name: Create Windows installer (optional)
+      run: |
+        # Install NSIS if you want to create an installer
+        # You can uncomment and modify this section later
+        # choco install nsis -y
+        # makensis installer_script.nsi
+      
+    - name: Archive Windows build
+      uses: actions/upload-artifact@v4
+      with:
+        name: kioju-link-manager-windows
+        path: build/windows/x64/runner/Release/
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Enable macOS desktop
+      run: flutter config --enable-macos-desktop
+      
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run tests
+      run: flutter test
+      
+    - name: Build macOS app
+      run: flutter build macos --release
+      
+    - name: Create DMG (optional)
+      run: |
+        # Install create-dmg for creating DMG files
+        # brew install create-dmg
+        # create-dmg --volname "Kioju Link Manager" --window-size 800 400 --icon-size 100 --app-drop-link 600 200 "kioju-link-manager.dmg" "build/macos/Build/Products/Release/"
+      
+    - name: Archive macOS build
+      uses: actions/upload-artifact@v4
+      with:
+        name: kioju-link-manager-macos
+        path: build/macos/Build/Products/Release/
+        retention-days: 30
+
+  create-release:
+    if: github.event_name == 'release'
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: kioju-link-manager-windows
+        path: ./windows-build
+        
+    - name: Download macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: kioju-link-manager-macos
+        path: ./macos-build
+        
+    - name: Create Windows ZIP
+      run: |
+        cd windows-build
+        zip -r ../kioju-link-manager-windows.zip .
+        
+    - name: Create macOS ZIP
+      run: |
+        cd macos-build
+        zip -r ../kioju-link-manager-macos.zip .
+        
+    - name: Upload Windows release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./kioju-link-manager-windows.zip
+        asset_name: kioju-link-manager-windows.zip
+        asset_content_type: application/zip
+        
+    - name: Upload macOS release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./kioju-link-manager-macos.zip
+        asset_name: kioju-link-manager-macos.zip
+        asset_content_type: application/zip

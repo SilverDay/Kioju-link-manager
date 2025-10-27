@@ -1,0 +1,72 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - '**.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Verify dependencies
+      run: flutter pub deps
+      
+    - name: Analyze code
+      run: flutter analyze --fatal-infos --fatal-warnings
+      
+    - name: Check formatting
+      run: dart format --set-exit-if-changed .
+      
+    - name: Run tests
+      run: flutter test --reporter=github
+      
+    - name: Check for outdated dependencies
+      run: flutter pub outdated
+      
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.35.7'
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run security audit
+      run: |
+        # Check for known vulnerabilities in dependencies
+        dart pub audit
+        
+    - name: Check for sensitive data
+      run: |
+        # Simple check for potential secrets or sensitive data
+        if grep -r "password\|secret\|key\|token" lib/ --exclude-dir=.git; then
+          echo "⚠️  Potential sensitive data found. Please review."
+          exit 1
+        else
+          echo "✅ No obvious sensitive data found."
+        fi
