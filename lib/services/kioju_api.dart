@@ -72,14 +72,12 @@ class KiojuApi {
         if (!validation.isValid) {
           throw ArgumentError('Invalid API token: ${validation.message}');
         }
-        
+
         // For macOS, we might need to configure secure storage options
         await _storage.write(
-          key: _tokenKey, 
+          key: _tokenKey,
           value: validation.sanitizedValue,
-          aOptions: const AndroidOptions(
-            encryptedSharedPreferences: true,
-          ),
+          aOptions: const AndroidOptions(encryptedSharedPreferences: true),
           iOptions: const IOSOptions(
             accessibility: KeychainAccessibility.first_unlock_this_device,
           ),
@@ -111,9 +109,7 @@ class KiojuApi {
     try {
       return await _storage.read(
         key: _tokenKey,
-        aOptions: const AndroidOptions(
-          encryptedSharedPreferences: true,
-        ),
+        aOptions: const AndroidOptions(encryptedSharedPreferences: true),
         iOptions: const IOSOptions(
           accessibility: KeychainAccessibility.first_unlock_this_device,
         ),
@@ -439,8 +435,8 @@ class KiojuApi {
     int offset = 0,
   }) async {
     // Validate input parameters
-    if (limit < 1 || limit > 1000) {
-      throw ArgumentError('Invalid limit: must be between 1 and 1000');
+    if (limit < 1 || limit > 100) {
+      throw ArgumentError('Invalid limit: must be between 1 and 100');
     }
     if (offset < 0) {
       throw ArgumentError('Invalid offset: must be non-negative');
@@ -564,6 +560,164 @@ class KiojuApi {
       return _sanitizeApiResponseItem(data);
     } catch (e) {
       throw Exception('Failed to parse API response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateLink({
+    required String id,
+    String? title,
+    String? description,
+    String? isPrivate,
+    List<String>? tags,
+  }) async {
+    // Validate the ID parameter
+    if (id.trim().isEmpty) {
+      throw ArgumentError('Link ID cannot be empty');
+    }
+
+    final sanitizedId = id.trim().replaceAll(RegExp(r'[<>"\x27]'), '');
+    if (sanitizedId.isEmpty) {
+      throw ArgumentError('Invalid link ID format');
+    }
+
+    // Validate title if provided
+    if (title != null) {
+      final titleValidation = SecurityUtils.validateTitle(title);
+      if (!titleValidation.isValid) {
+        throw ArgumentError('Invalid title: ${titleValidation.message}');
+      }
+    }
+
+    // Validate description if provided
+    if (description != null) {
+      // Allow empty descriptions to clear them
+      if (description.isNotEmpty) {
+        final descValidation = SecurityUtils.validateNotes(description);
+        if (!descValidation.isValid) {
+          throw ArgumentError('Invalid description: ${descValidation.message}');
+        }
+      }
+    }
+
+    // Validate privacy setting if provided
+    if (isPrivate != null && isPrivate != '0' && isPrivate != '1') {
+      throw ArgumentError('Invalid privacy setting: must be "0" or "1"');
+    }
+
+    // Validate tags if provided
+    if (tags != null) {
+      final tagsValidation = SecurityUtils.validateTags(tags);
+      if (!tagsValidation.isValid) {
+        throw ArgumentError('Invalid tags: ${tagsValidation.message}');
+      }
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{'action': 'update', 'id': sanitizedId};
+
+    // Add optional parameters only if they are provided
+    if (title != null) {
+      final titleValidation = SecurityUtils.validateTitle(title);
+      if (titleValidation.sanitizedValue != null) {
+        form['title'] = titleValidation.sanitizedValue!;
+      }
+    }
+
+    if (description != null) {
+      if (description.isEmpty) {
+        form['description'] = ''; // Clear description
+      } else {
+        final descValidation = SecurityUtils.validateNotes(description);
+        if (descValidation.sanitizedValue != null) {
+          form['description'] = descValidation.sanitizedValue!;
+        }
+      }
+    }
+
+    if (isPrivate != null) {
+      form['is_private'] = isPrivate;
+    }
+
+    if (tags != null) {
+      final tagsValidation = SecurityUtils.validateTags(tags);
+      if (tagsValidation.sanitizedValue != null) {
+        form['tags'] = (tagsValidation.sanitizedValue as List<String>).join(
+          ',',
+        );
+      }
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse API response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkPremiumStatus() async {
+    final token = await _readToken();
+
+    final uri = Uri.parse(
+      _baseUrl,
+    ).replace(queryParameters: {'action': 'premium_status'});
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse API response: $e');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> searchTags({
+    required String query,
+    int limit = 10,
+  }) async {
+    // Validate input parameters
+    if (query.trim().isEmpty) {
+      throw ArgumentError('Search query cannot be empty');
+    }
+    if (limit < 1 || limit > 30) {
+      throw ArgumentError('Invalid limit: must be between 1 and 30');
+    }
+
+    // Use the tag suggestions endpoint
+    final uri = Uri.parse(
+      'https://kioju.de/api/tag_suggestions.php',
+    ).replace(queryParameters: {'q': query.trim(), 'limit': '$limit'});
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['success'] == true && data['results'] is List) {
+        return List<Map<String, dynamic>>.from(data['results']);
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to parse tag search response: $e');
     }
   }
 }

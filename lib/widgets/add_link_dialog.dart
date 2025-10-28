@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../utils/security_utils.dart';
+import '../services/web_metadata_service.dart';
+import '../services/app_settings.dart';
+import '../models/link.dart';
 
 class AddLinkDialog extends StatefulWidget {
   const AddLinkDialog({super.key});
@@ -15,10 +19,28 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
   final _descriptionController = TextEditingController();
   final _tagsController = TextEditingController();
   bool _isValidatingUrl = false;
-  bool _isPrivate = false;
+  bool _isPrivate = true; // Default to private as per API documentation
+  bool _autoFetchEnabled = true;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAutoFetchSetting();
+  }
+
+  Future<void> _loadAutoFetchSetting() async {
+    final enabled = await AppSettings.getAutoFetchMetadata();
+    if (mounted) {
+      setState(() {
+        _autoFetchEnabled = enabled;
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _urlController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
@@ -27,24 +49,73 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
   }
 
   Future<void> _autoFillFromUrl() async {
+    // Cancel any existing timer
+    _debounceTimer?.cancel();
+
+    // Start a new timer with 1 second delay
+    _debounceTimer = Timer(const Duration(seconds: 1), () {
+      _performAutoFill();
+    });
+  }
+
+  Future<void> _performAutoFill() async {
     final url = _urlController.text.trim();
     if (url.isEmpty) return;
 
+    // Check if auto-fetch is enabled
+    final autoFetchEnabled = await AppSettings.getAutoFetchMetadata();
+    if (!autoFetchEnabled) return;
+
     setState(() => _isValidatingUrl = true);
 
-    // Try to auto-fill title from URL
     try {
-      final uri = Uri.parse(url);
-      if (uri.hasScheme && _titleController.text.isEmpty) {
-        // Extract domain as fallback title
-        final domain = uri.host.replaceAll('www.', '');
-        _titleController.text = domain;
+      // Fetch metadata from the URL
+      final metadata = await WebMetadataService.fetchMetadata(url);
+
+      if (metadata != null && mounted) {
+        setState(() {
+          // Auto-fill title if empty and metadata has title
+          if (_titleController.text.isEmpty && metadata.title != null) {
+            _titleController.text = metadata.title!;
+          }
+
+          // Auto-fill description if empty and metadata has description
+          if (_descriptionController.text.isEmpty &&
+              metadata.description != null) {
+            _descriptionController.text = metadata.description!;
+          }
+        });
+      } else {
+        // Fallback to domain extraction if metadata fetch failed
+        final uri = Uri.tryParse(url);
+        if (uri != null &&
+            uri.hasScheme &&
+            _titleController.text.isEmpty &&
+            mounted) {
+          setState(() {
+            final domain = uri.host.replaceAll('www.', '');
+            _titleController.text = domain;
+          });
+        }
       }
     } catch (e) {
-      // Invalid URL, will be caught by validator
+      // Fallback to domain extraction on any error
+      try {
+        final uri = Uri.parse(url);
+        if (uri.hasScheme && _titleController.text.isEmpty && mounted) {
+          setState(() {
+            final domain = uri.host.replaceAll('www.', '');
+            _titleController.text = domain;
+          });
+        }
+      } catch (e) {
+        // Invalid URL, will be caught by validator
+      }
     }
 
-    setState(() => _isValidatingUrl = false);
+    if (mounted) {
+      setState(() => _isValidatingUrl = false);
+    }
   }
 
   String? _validateUrlField(String? value) {
@@ -127,15 +198,20 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                         decoration: InputDecoration(
                           labelText: 'URL *',
                           hintText: 'https://example.com',
+                          helperText:
+                              _autoFetchEnabled
+                                  ? 'Title and description will be fetched automatically'
+                                  : 'Auto-fetch is disabled in settings',
                           prefixIcon: const Icon(Icons.link),
                           suffixIcon:
                               _isValidatingUrl
-                                  ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: Padding(
-                                      padding: EdgeInsets.all(12),
-                                      child: CircularProgressIndicator(
+                                  ? Tooltip(
+                                    message: 'Fetching page information...',
+                                    child: Container(
+                                      width: 24,
+                                      height: 24,
+                                      margin: const EdgeInsets.all(12),
+                                      child: const CircularProgressIndicator(
                                         strokeWidth: 2,
                                       ),
                                     ),
@@ -157,23 +233,64 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
 
                       const SizedBox(height: 16),
 
-                      // Title Field
-                      TextFormField(
-                        controller: _titleController,
-                        decoration: InputDecoration(
-                          labelText: 'Title',
-                          hintText: 'Enter a descriptive title',
-                          prefixIcon: const Icon(Icons.title),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      // Title Field with refresh button
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _titleController,
+                              decoration: InputDecoration(
+                                labelText: 'Title',
+                                hintText: 'Enter a descriptive title',
+                                prefixIcon: const Icon(Icons.title),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                filled: true,
+                                fillColor:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
+                              ),
+                              textInputAction: TextInputAction.next,
+                            ),
                           ),
-                          filled: true,
-                          fillColor:
-                              Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                        ),
-                        textInputAction: TextInputAction.next,
+                          const SizedBox(width: 8),
+                          Tooltip(
+                            message: 'Refresh page info',
+                            child: IconButton(
+                              onPressed:
+                                  _isValidatingUrl
+                                      ? null
+                                      : () async {
+                                        if (_urlController.text
+                                            .trim()
+                                            .isNotEmpty) {
+                                          await _performAutoFill();
+                                        }
+                                      },
+                              icon:
+                                  _isValidatingUrl
+                                      ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : const Icon(Icons.refresh),
+                              style: IconButton.styleFrom(
+                                backgroundColor:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHigh,
+                                foregroundColor:
+                                    Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
 
                       const SizedBox(height: 16),
@@ -517,5 +634,262 @@ Future<Map<String, dynamic>?> showAddLinkDialog(BuildContext context) {
   return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => const AddLinkDialog(),
+  );
+}
+
+class EditLinkDialog extends StatefulWidget {
+  final LinkItem item;
+
+  const EditLinkDialog({super.key, required this.item});
+
+  @override
+  State<EditLinkDialog> createState() => _EditLinkDialogState();
+}
+
+class _EditLinkDialogState extends State<EditLinkDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _tagsController = TextEditingController();
+  bool _isPrivate = true; // Default to private as per API documentation
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeFields();
+  }
+
+  void _initializeFields() {
+    _titleController.text = widget.item.title ?? '';
+    _descriptionController.text = widget.item.notes ?? '';
+    _tagsController.text = widget.item.tags.join(', ');
+    _isPrivate = widget.item.isPrivate;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _tagsController.dispose();
+    super.dispose();
+  }
+
+  List<String> _parseTags(String tagsText) {
+    return tagsText
+        .split(',')
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+  }
+
+  void _saveLink() {
+    if (_formKey.currentState!.validate()) {
+      // Validate all inputs
+      final titleValidation = SecurityUtils.validateTitle(
+        _titleController.text.trim(),
+      );
+      final notesValidation = SecurityUtils.validateNotes(
+        _descriptionController.text.trim(),
+      );
+      final tags = _parseTags(_tagsController.text);
+      final tagsValidation = SecurityUtils.validateTags(tags);
+
+      if (!titleValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid title: ${titleValidation.message}')),
+        );
+        return;
+      }
+
+      if (!notesValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid description: ${notesValidation.message}'),
+          ),
+        );
+        return;
+      }
+
+      if (!tagsValidation.isValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid tags: ${tagsValidation.message}')),
+        );
+        return;
+      }
+
+      final result = {
+        'url': widget.item.url, // URL cannot be changed through API
+        'title': titleValidation.sanitizedValue,
+        'description': notesValidation.sanitizedValue,
+        'tags': tagsValidation.sanitizedValue ?? <String>[],
+        'isPrivate': _isPrivate,
+      };
+
+      Navigator.of(context).pop(result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.edit, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 12),
+          const Text('Edit Link'),
+        ],
+      ),
+      content: SizedBox(
+        width: 500,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // URL display (read-only)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.link,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.item.url,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Title field
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  prefixIcon: Icon(Icons.title),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Title is required';
+                  }
+                  final validation = SecurityUtils.validateTitle(value.trim());
+                  if (!validation.isValid) {
+                    return validation.message;
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Description field
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  prefixIcon: Icon(Icons.description),
+                ),
+                maxLines: 3,
+                validator: (value) {
+                  if (value != null && value.trim().isNotEmpty) {
+                    final validation = SecurityUtils.validateNotes(
+                      value.trim(),
+                    );
+                    if (!validation.isValid) {
+                      return validation.message;
+                    }
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Tags field
+              TextFormField(
+                controller: _tagsController,
+                decoration: const InputDecoration(
+                  labelText: 'Tags (comma-separated)',
+                  prefixIcon: Icon(Icons.tag),
+                  hintText: 'research, articles, important',
+                ),
+                validator: (value) {
+                  if (value != null && value.trim().isNotEmpty) {
+                    final tags = _parseTags(value);
+                    final validation = SecurityUtils.validateTags(tags);
+                    if (!validation.isValid) {
+                      return validation.message;
+                    }
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Privacy toggle
+              Row(
+                children: [
+                  Icon(
+                    Icons.visibility,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Private Link',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  Switch(
+                    value: _isPrivate,
+                    onChanged: (value) {
+                      setState(() {
+                        _isPrivate = value;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _saveLink, child: const Text('Update')),
+      ],
+    );
+  }
+}
+
+// Helper function to show the edit dialog
+Future<Map<String, dynamic>?> showEditLinkDialog(
+  BuildContext context,
+  LinkItem item,
+) {
+  return showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) => EditLinkDialog(item: item),
   );
 }

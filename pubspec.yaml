@@ -24,8 +24,21 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/icon.png
+    - assets/kioju-icon.png
+
+# Configuration for flutter_launcher_icons
+flutter_launcher_icons:
+  android: false  # Set to true if you add Android support later
+  ios: false      # Set to true if you add iOS support later
+  windows:
+    generate: true
+    image_path: "assets/kioju-icon.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "assets/kioju-icon.png"

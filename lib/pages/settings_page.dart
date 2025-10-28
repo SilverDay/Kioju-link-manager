@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/kioju_api.dart';
+import '../services/app_settings.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -11,6 +12,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _tokenCtrl = TextEditingController();
   bool _hasToken = false;
+  bool _autoFetchMetadata = true;
 
   @override
   void initState() {
@@ -20,6 +22,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _init() async {
     _hasToken = await KiojuApi.hasToken();
+    _autoFetchMetadata = await AppSettings.getAutoFetchMetadata();
     setState(() {});
   }
 
@@ -167,10 +170,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ElevatedButton.icon(
                       onPressed: () async {
                         final t = _tokenCtrl.text.trim();
-                        final primaryColor = Theme.of(context).colorScheme.primary;
+                        final primaryColor =
+                            Theme.of(context).colorScheme.primary;
                         final errorColor = Theme.of(context).colorScheme.error;
                         final scaffoldMessenger = ScaffoldMessenger.of(context);
-                        
+
                         try {
                           await KiojuApi.setToken(t.isEmpty ? null : t);
 
@@ -195,10 +199,15 @@ class _SettingsPageState extends State<SettingsPage> {
                               SnackBar(
                                 content: Row(
                                   children: [
-                                    const Icon(Icons.error, color: Colors.white),
+                                    const Icon(
+                                      Icons.error,
+                                      color: Colors.white,
+                                    ),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                      child: Text('Failed to save API token: ${e.toString()}'),
+                                      child: Text(
+                                        'Failed to save API token: ${e.toString()}',
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -217,6 +226,128 @@ class _SettingsPageState extends State<SettingsPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // App Preferences Section
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outline.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).colorScheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.tune,
+                          color:
+                              Theme.of(context).colorScheme.onTertiaryContainer,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'App Preferences',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Auto-fetch metadata setting
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Auto-fetch Title & Description',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w500),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Automatically retrieve page title and description when adding links',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _autoFetchMetadata,
+                          onChanged: (value) async {
+                            final scaffoldMessenger = ScaffoldMessenger.of(
+                              context,
+                            );
+
+                            setState(() {
+                              _autoFetchMetadata = value;
+                            });
+
+                            await AppSettings.setAutoFetchMetadata(value);
+
+                            if (mounted) {
+                              scaffoldMessenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    value
+                                        ? 'Auto-fetch enabled'
+                                        : 'Auto-fetch disabled',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ],
