@@ -75,6 +75,22 @@ xattr -l kioju_link_manager_flutter.app
 
 After removing the quarantine attribute, try opening the app again.
 
+#### Method 4: Using the Launch Script (Easiest)
+
+The repository includes a helper script that automates the quarantine removal:
+
+```bash
+# From the project directory
+./launch-macos.sh
+```
+
+This script will:
+- Locate your app automatically
+- Check for quarantine attributes
+- Offer to remove them with your permission
+- Verify the code signature
+- Launch the app
+
 ## Building from Source
 
 If you're building the app from source code:
@@ -100,9 +116,12 @@ flutter build macos --release
 
 # The app will be located at:
 # build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+
+# Optional: Use the launch script to run the app
+./launch-macos.sh
 ```
 
-After building, the app will have an ad-hoc signature. Follow the instructions in "Option 2: Running Unsigned Builds" above to run it.
+After building, the app will have an ad-hoc signature. You can use the `launch-macos.sh` script or follow the instructions in "Option 2: Running Unsigned Builds" above to run it.
 
 ## For Developers: Setting Up Code Signing
 
