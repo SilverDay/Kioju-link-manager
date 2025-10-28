@@ -76,15 +76,106 @@ jobs:
     - name: Run tests
       run: flutter test
       
+    - name: Setup code signing (if certificates available)
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      run: |
+        if [ -n "$MACOS_CERTIFICATE" ]; then
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          
+          # Decode and import certificate
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+          
+          # Create keychain and import certificate
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import certificate.p12 -P "$MACOS_CERTIFICATE_PWD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          
+          # Clean up certificate file
+          rm certificate.p12
+          
+          # Set signing identity for codesign
+          echo "CODESIGN_IDENTITY=$MACOS_SIGNING_IDENTITY" >> $GITHUB_ENV
+        else
+          echo "No certificate configured, skipping code signing setup"
+        fi
+        
     - name: Build macOS app
-      run: flutter build macos --release
+      run: |
+        if [ -n "$CODESIGN_IDENTITY" ]; then
+          echo "Building with code signing: $CODESIGN_IDENTITY"
+          flutter build macos --release
+        else
+          echo "Building without code signing (ad-hoc signature will be applied)"
+          flutter build macos --release
+        fi
       
+    - name: Apply ad-hoc signature (if no certificate)
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      run: |
+        if [ -z "$MACOS_CERTIFICATE" ]; then
+          echo "Applying ad-hoc signature for testing purposes"
+          codesign --force --deep --sign - build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        else
+          echo "Certificate configured, skipping ad-hoc signature"
+        fi
+        
+    - name: Verify code signature
+      run: |
+        codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        codesign -dv --verbose=4 build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        
+    - name: Notarize app (if certificates available)
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        if [ -n "$MACOS_CERTIFICATE" ] && [ -n "$APPLE_ID" ]; then
+          # Create a ZIP for notarization
+          cd build/macos/Build/Products/Release
+          zip -r kioju_link_manager_flutter.zip kioju_link_manager_flutter.app
+          
+          # Submit for notarization
+          xcrun notarytool submit kioju_link_manager_flutter.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          
+          # Staple the notarization ticket
+          xcrun stapler staple kioju_link_manager_flutter.app
+          
+          # Clean up ZIP
+          rm kioju_link_manager_flutter.zip
+        else
+          echo "Certificate or Apple ID not configured, skipping notarization"
+        fi
+        
     - name: Create DMG (optional)
       run: |
         # Install create-dmg for creating DMG files
         # brew install create-dmg
         # create-dmg --volname "Kioju Link Manager" --window-size 800 400 --icon-size 100 --app-drop-link 600 200 "kioju-link-manager.dmg" "build/macos/Build/Products/Release/"
       
+    - name: Clean up keychain
+      if: always()
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      run: |
+        if [ -n "$MACOS_CERTIFICATE" ]; then
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          security delete-keychain "$KEYCHAIN_PATH" || true
+        fi
+        
     - name: Archive macOS build
       uses: actions/upload-artifact@v4
       with:
