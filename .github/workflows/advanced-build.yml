@@ -131,12 +131,14 @@ jobs:
         echo "Signing with hardened runtime and entitlements: $CODESIGN_IDENTITY"
         # Sign all frameworks and dylibs first
         find build/macos/Build/Products/Release/kioju_link_manager_flutter.app/Contents/Frameworks -name "*.dylib" -o -name "*.framework" | while read file; do
+          echo "Signing: $file"
           codesign --force --options runtime --timestamp \
             --sign "$CODESIGN_IDENTITY" \
-            "$file" 2>/dev/null || true
+            "$file" || echo "Warning: Failed to sign $file (may not require signing)"
         done
         
         # Sign the main app bundle with entitlements and hardened runtime
+        echo "Signing main app bundle..."
         codesign --force --options runtime --timestamp \
           --entitlements macos/Runner/Release.entitlements \
           --sign "$CODESIGN_IDENTITY" \
