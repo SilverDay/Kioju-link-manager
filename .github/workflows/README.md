@@ -94,9 +94,21 @@ To provide users with a seamless installation experience without security warnin
 **Note**: Code signing and notarization require an Apple Developer account ($99/year).
 
 **Workflow Behavior**:
-- If certificates are configured, builds are automatically signed and notarized
+- If certificates are configured, builds are automatically signed with **hardened runtime** and **notarized** by Apple
+- Hardened runtime is enabled for security and notarization compliance
+- App entitlements are properly configured for sandboxing and network access
 - If certificates are missing, builds use ad-hoc signing (users will see security warnings)
 - Users can still run ad-hoc signed builds by following instructions in [MACOS_INSTALLATION.md](../../MACOS_INSTALLATION.md)
+
+**Signing Process** (when certificates are available):
+1. Build app with Flutter
+2. Sign all frameworks and dynamic libraries with hardened runtime
+3. Sign main app bundle with entitlements and hardened runtime
+4. Submit to Apple's notary service for malware scanning
+5. Staple notarization ticket to app bundle
+6. Result: App opens without Gatekeeper warnings
+
+For detailed setup instructions, see the "For Maintainers" section in [MACOS_INSTALLATION.md](../../MACOS_INSTALLATION.md).
 
 #### For Windows Code Signing
 

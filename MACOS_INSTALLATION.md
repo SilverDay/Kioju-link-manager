@@ -2,6 +2,83 @@
 
 This guide explains how to install and run the Kioju Link Manager on macOS, including solutions for security warnings.
 
+## For Maintainers: Setting Up Code Signing
+
+**Important:** To eliminate security warnings for end users, the app must be properly signed and notarized. This requires:
+
+1. An active **Apple Developer Program** membership ($99/year)
+2. A **Developer ID Application** certificate
+3. Proper **GitHub Secrets** configuration
+
+### Quick Setup Guide for Maintainers
+
+#### Step 1: Get Apple Developer Credentials
+
+1. Enroll in the [Apple Developer Program](https://developer.apple.com/programs/)
+2. Create a **Developer ID Application** certificate in your Apple Developer account:
+   - Go to [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list)
+   - Click the **+** button to create a new certificate
+   - Select **Developer ID Application** and follow the prompts
+   - Download the certificate and import it into Keychain Access
+3. Create an **App-Specific Password** for notarization:
+   - Go to [appleid.apple.com](https://appleid.apple.com)
+   - Sign in and go to Security > App-Specific Passwords
+   - Click **+** to generate a new password
+   - Save this password securely
+
+#### Step 2: Export Certificate for GitHub Actions
+
+1. Open **Keychain Access** on macOS
+2. Find your **Developer ID Application** certificate
+3. Right-click and select **Export "Developer ID Application..."**
+4. Save as `.p12` format with a password (remember this password!)
+5. Convert to base64 for GitHub:
+   ```bash
+   base64 -i YourCertificate.p12 | pbcopy
+   ```
+   This copies the base64-encoded certificate to your clipboard
+
+#### Step 3: Configure GitHub Repository Secrets
+
+Add these secrets to your GitHub repository (Settings > Secrets and variables > Actions):
+
+| Secret Name | Description | How to Get It |
+|------------|-------------|---------------|
+| `MACOS_CERTIFICATE` | Base64-encoded .p12 certificate | Result from Step 2 |
+| `MACOS_CERTIFICATE_PWD` | Password for the .p12 file | Password you set when exporting |
+| `MACOS_SIGNING_IDENTITY` | Certificate identity name | e.g., "Developer ID Application: Your Name (TEAMID)" |
+| `APPLE_ID` | Your Apple ID email | Your Apple Developer account email |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password | From Step 1.3 |
+| `APPLE_TEAM_ID` | Your Apple Team ID | Found in [Apple Developer Membership](https://developer.apple.com/account/#!/membership) |
+
+**To find your signing identity:**
+```bash
+security find-identity -v -p codesigning
+```
+Look for a line like: "Developer ID Application: Your Name (TEAM123456)"
+
+#### Step 4: Verify Setup
+
+Once secrets are configured:
+1. Push a commit or create a release
+2. GitHub Actions will automatically:
+   - Sign the app with your Developer ID
+   - Enable hardened runtime for security
+   - Submit to Apple for notarization
+   - Staple the notarization ticket to the app
+3. Check the Actions logs to verify successful signing and notarization
+4. Download the artifact and verify:
+   ```bash
+   codesign -dv --verbose=4 kioju_link_manager_flutter.app
+   spctl -a -vv kioju_link_manager_flutter.app
+   ```
+
+**Expected output when properly signed:**
+- Signature shows "Developer ID Application: Your Name"
+- `spctl` reports "accepted" and "source=Notarized Developer ID"
+
+---
+
 ## Understanding macOS Security
 
 macOS includes a security feature called **Gatekeeper** that helps protect your Mac from malicious software. When you download an application from outside the Mac App Store, you may see a warning message.
@@ -123,46 +200,62 @@ flutter build macos --release
 
 After building, the app will have an ad-hoc signature. You can use the `launch-macos.sh` script or follow the instructions in "Option 2: Running Unsigned Builds" above to run it.
 
-## For Developers: Setting Up Code Signing
+## Verifying Signed Releases
 
-If you're a developer with an Apple Developer account and want to sign the app:
+If you've downloaded a release that should be signed and notarized, verify it:
+
+### Check Code Signature
+```bash
+# View signature details
+codesign -dv --verbose=4 kioju_link_manager_flutter.app
+
+# Verify signature
+codesign --verify --deep --strict --verbose=2 kioju_link_manager_flutter.app
+```
+
+**What to look for:**
+- Authority should show "Developer ID Application: ..."
+- Signature flags should include "runtime" for hardened runtime
+- TeamIdentifier should be present
+
+### Check Notarization
+```bash
+# Check if app is notarized
+spctl -a -vv kioju_link_manager_flutter.app
+
+# Check notarization ticket
+stapler validate kioju_link_manager_flutter.app
+```
+
+**Expected results for properly signed & notarized app:**
+- `spctl` should report: "accepted" and "source=Notarized Developer ID"
+- `stapler validate` should report: "The validate action worked!"
+
+If the app is properly signed and notarized, it should open without any security warnings.
+
+## For Developers: Manual Code Signing
+
+If you're a developer who wants to manually sign the app locally (instead of using GitHub Actions automated signing described at the top of this document):
 
 ### Prerequisites
 
 - Apple Developer account ($99/year)
-- Developer ID Application certificate
+- Developer ID Application certificate installed in Keychain
 - Apple ID with app-specific password
 
-### GitHub Actions Setup
+### Local Signing Steps
 
-Add these secrets to your GitHub repository:
-
-1. **MACOS_CERTIFICATE** - Base64-encoded .p12 certificate file
-   ```bash
-   base64 -i YourCertificate.p12 | pbcopy
-   ```
-
-2. **MACOS_CERTIFICATE_PWD** - Password for the .p12 certificate
-
-3. **MACOS_SIGNING_IDENTITY** - Certificate name (e.g., "Developer ID Application: Your Name (TEAM_ID)")
-
-4. **APPLE_ID** - Your Apple ID email
-
-5. **APPLE_APP_SPECIFIC_PASSWORD** - App-specific password from appleid.apple.com
-
-6. **APPLE_TEAM_ID** - Your Apple Developer Team ID
-
-### Local Signing
-
-To sign the app locally:
+To sign the app locally after building:
 
 ```bash
 # Build the app
 flutter build macos --release
 
-# Sign the app bundle
-codesign --deep --force --verify --verbose \
+# Sign with hardened runtime and entitlements
+codesign --force --options runtime --timestamp \
+  --entitlements macos/Runner/Release.entitlements \
   --sign "Developer ID Application: Your Name (TEAM_ID)" \
+  --deep \
   build/macos/Build/Products/Release/kioju_link_manager_flutter.app
 
 # Verify the signature

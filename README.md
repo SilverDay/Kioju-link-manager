@@ -33,7 +33,10 @@ A modern, cross-platform Flutter application for managing Kioju links with seaml
 #### Downloading Pre-built Releases
 1. Go to the [Releases page](https://github.com/SilverDay/Kioju-link-manager/releases)
 2. Download the appropriate package for your platform
-3. **For macOS users**: See [MACOS_INSTALLATION.md](MACOS_INSTALLATION.md) for instructions on handling security warnings
+3. **For macOS users**: 
+   - Properly signed and notarized releases (when available) will open without security warnings
+   - If you see security warnings, see [MACOS_INSTALLATION.md](MACOS_INSTALLATION.md) for complete setup instructions
+   - The installation guide also contains instructions for maintainers on setting up code signing
 
 #### Building from Source
 ```powershell
