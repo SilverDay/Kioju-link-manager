@@ -63,18 +63,40 @@ The basic workflows will work immediately after committing these files. They wil
 
 ### Advanced Setup (Optional)
 
-#### For Code Signing (macOS)
+#### For Code Signing and Notarization (macOS)
 
-Add these secrets to your GitHub repository:
+To provide users with a seamless installation experience without security warnings, add these secrets to your GitHub repository:
 
-1. `MACOS_CERTIFICATE` - Base64 encoded .p12 certificate
-2. `MACOS_CERTIFICATE_PWD` - Certificate password
-3. `MACOS_CERTIFICATE_NAME` - Certificate name for codesign
+1. **MACOS_CERTIFICATE** - Base64 encoded .p12 certificate file
+   - Export your "Developer ID Application" certificate from Keychain Access as .p12
+   - Include the private key when exporting
+   
+   ```bash
+   # Generate base64 certificate
+   base64 -i your_certificate.p12 | pbcopy
+   # Paste this into the GitHub secret
+   ```
 
-```bash
-# Generate base64 certificate
-base64 -i your_certificate.p12 | pbcopy
-```
+2. **MACOS_CERTIFICATE_PWD** - Password you set when exporting the .p12 certificate
+
+3. **MACOS_SIGNING_IDENTITY** - Full certificate name for codesign
+   - Example: `"Developer ID Application: Your Name (TEAM123)"`
+   - Find this by running: `security find-identity -v -p codesigning`
+
+4. **APPLE_ID** - Your Apple ID email address used for notarization
+
+5. **APPLE_APP_SPECIFIC_PASSWORD** - App-specific password from appleid.apple.com
+   - Generate at: https://appleid.apple.com/account/manage > App-Specific Passwords
+   
+6. **APPLE_TEAM_ID** - Your Apple Developer Team ID
+   - Find at: https://developer.apple.com/account > Membership
+
+**Note**: Code signing and notarization require an Apple Developer account ($99/year).
+
+**Workflow Behavior**:
+- If certificates are configured, builds are automatically signed and notarized
+- If certificates are missing, builds use ad-hoc signing (users will see security warnings)
+- Users can still run ad-hoc signed builds by following instructions in [MACOS_INSTALLATION.md](../../MACOS_INSTALLATION.md)
 
 #### For Windows Code Signing
 
