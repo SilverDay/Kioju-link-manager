@@ -166,27 +166,52 @@ class _SettingsPageState extends State<SettingsPage> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        final t = _tokenCtrl.text.trim();
-                        final primaryColor =
-                            Theme.of(context).colorScheme.primary;
-                        final scaffoldMessenger = ScaffoldMessenger.of(context);
-                        await KiojuApi.setToken(t.isEmpty ? null : t);
+                        try {
+                          final t = _tokenCtrl.text.trim();
+                          final primaryColor =
+                              Theme.of(context).colorScheme.primary;
+                          final scaffoldMessenger = ScaffoldMessenger.of(context);
+                          
+                          // Add some debugging
+                          print('Attempting to save token: ${t.isNotEmpty ? '[REDACTED]' : 'empty'}');
+                          
+                          await KiojuApi.setToken(t.isEmpty ? null : t);
 
-                        if (mounted) {
-                          scaffoldMessenger.showSnackBar(
-                            SnackBar(
-                              content: const Row(
-                                children: [
-                                  Icon(Icons.check, color: Colors.white),
-                                  SizedBox(width: 8),
-                                  Text('API token saved successfully'),
-                                ],
+                          if (mounted) {
+                            scaffoldMessenger.showSnackBar(
+                              SnackBar(
+                                content: const Row(
+                                  children: [
+                                    Icon(Icons.check, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text('API token saved successfully'),
+                                  ],
+                                ),
+                                backgroundColor: primaryColor,
                               ),
-                              backgroundColor: primaryColor,
-                            ),
-                          );
+                            );
+                          }
+                          await _init();
+                        } catch (e) {
+                          print('Error saving token: $e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.error, color: Colors.white),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text('Failed to save API token: ${e.toString()}'),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: Theme.of(context).colorScheme.error,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
+                          }
                         }
-                        await _init();
                       },
                       icon: const Icon(Icons.save),
                       label: const Text('Save API Token'),

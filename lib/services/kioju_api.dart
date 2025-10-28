@@ -63,20 +63,71 @@ class KiojuApi {
   static Duration? _rateLimitCooldown;
 
   static Future<void> setToken(String? token) async {
-    if (token == null || token.isEmpty) {
-      await _storage.delete(key: _tokenKey);
-    } else {
-      // Validate token before storing
-      final validation = SecurityUtils.validateApiToken(token);
-      if (!validation.isValid) {
-        throw ArgumentError('Invalid API token: ${validation.message}');
+    try {
+      if (token == null || token.isEmpty) {
+        await _storage.delete(key: _tokenKey);
+      } else {
+        // Validate token before storing
+        final validation = SecurityUtils.validateApiToken(token);
+        if (!validation.isValid) {
+          throw ArgumentError('Invalid API token: ${validation.message}');
+        }
+        
+        // For macOS, we might need to configure secure storage options
+        await _storage.write(
+          key: _tokenKey, 
+          value: validation.sanitizedValue,
+          aOptions: const AndroidOptions(
+            encryptedSharedPreferences: true,
+          ),
+          iOptions: const IOSOptions(
+            accessibility: KeychainAccessibility.first_unlock_this_device,
+          ),
+          mOptions: const MacOsOptions(
+            accessibility: KeychainAccessibility.first_unlock_this_device,
+          ),
+          wOptions: const WindowsOptions(),
+          lOptions: const LinuxOptions(),
+        );
       }
-      await _storage.write(key: _tokenKey, value: validation.sanitizedValue);
+    } catch (e) {
+      // Re-throw with more context for debugging
+      throw Exception('Failed to save API token: $e');
     }
   }
 
-  static Future<bool> hasToken() async =>
-      (await _storage.read(key: _tokenKey)) != null;
+  static Future<bool> hasToken() async {
+    try {
+      final token = await _readToken();
+      return token != null && token.isNotEmpty;
+    } catch (e) {
+      print('Error checking for token: $e');
+      return false;
+    }
+  }
+
+  /// Helper method to read the token with consistent configuration
+  static Future<String?> _readToken() async {
+    try {
+      return await _storage.read(
+        key: _tokenKey,
+        aOptions: const AndroidOptions(
+          encryptedSharedPreferences: true,
+        ),
+        iOptions: const IOSOptions(
+          accessibility: KeychainAccessibility.first_unlock_this_device,
+        ),
+        mOptions: const MacOsOptions(
+          accessibility: KeychainAccessibility.first_unlock_this_device,
+        ),
+        wOptions: const WindowsOptions(),
+        lOptions: const LinuxOptions(),
+      );
+    } catch (e) {
+      print('Error reading token from secure storage: $e');
+      return null;
+    }
+  }
 
   /// Gets rate limit status information
   static Map<String, dynamic> getRateLimitStatus() {
@@ -395,7 +446,7 @@ class KiojuApi {
       throw ArgumentError('Invalid offset: must be non-negative');
     }
 
-    final token = await _storage.read(key: _tokenKey);
+    final token = await _readToken();
 
     final uri = Uri.parse(_baseUrl).replace(
       queryParameters: {
@@ -456,7 +507,7 @@ class KiojuApi {
       throw ArgumentError('Invalid privacy setting: must be "0" or "1"');
     }
 
-    final token = await _storage.read(key: _tokenKey);
+    final token = await _readToken();
 
     final form = {
       'action': 'add',
@@ -496,7 +547,7 @@ class KiojuApi {
       throw ArgumentError('Invalid link ID format');
     }
 
-    final token = await _storage.read(key: _tokenKey);
+    final token = await _readToken();
 
     final headers = <String, String>{
       'Content-Type': 'application/x-www-form-urlencoded',
