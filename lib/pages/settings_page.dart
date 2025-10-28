@@ -166,15 +166,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () async {
+                        final t = _tokenCtrl.text.trim();
+                        final primaryColor = Theme.of(context).colorScheme.primary;
+                        final errorColor = Theme.of(context).colorScheme.error;
+                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                        
                         try {
-                          final t = _tokenCtrl.text.trim();
-                          final primaryColor =
-                              Theme.of(context).colorScheme.primary;
-                          final scaffoldMessenger = ScaffoldMessenger.of(context);
-                          
-                          // Add some debugging
-                          print('Attempting to save token: ${t.isNotEmpty ? '[REDACTED]' : 'empty'}');
-                          
                           await KiojuApi.setToken(t.isEmpty ? null : t);
 
                           if (mounted) {
@@ -193,9 +190,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           }
                           await _init();
                         } catch (e) {
-                          print('Error saving token: $e');
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            scaffoldMessenger.showSnackBar(
                               SnackBar(
                                 content: Row(
                                   children: [
@@ -206,7 +202,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     ),
                                   ],
                                 ),
-                                backgroundColor: Theme.of(context).colorScheme.error,
+                                backgroundColor: errorColor,
                                 duration: const Duration(seconds: 5),
                               ),
                             );

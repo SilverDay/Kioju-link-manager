@@ -101,7 +101,7 @@ class KiojuApi {
       final token = await _readToken();
       return token != null && token.isNotEmpty;
     } catch (e) {
-      print('Error checking for token: $e');
+      // Silent failure - token check should not throw
       return false;
     }
   }
@@ -124,7 +124,7 @@ class KiojuApi {
         lOptions: const LinuxOptions(),
       );
     } catch (e) {
-      print('Error reading token from secure storage: $e');
+      // Silent failure - return null if secure storage is not available
       return null;
     }
   }
