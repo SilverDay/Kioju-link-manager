@@ -57,7 +57,7 @@ if xattr -l "$APP_PATH" | grep -q "com.apple.quarantine"; then
     echo "Would you like to remove the quarantine attribute? This will allow the app to"
     echo "open without security warnings. Only do this if you trust the source of this app."
     echo ""
-    read -p "Remove quarantine attribute? (y/N): " -n 1 -r
+    read -t 30 -p "Remove quarantine attribute? (y/N): " -n 1 -r || { echo ""; echo "⚠️  No response received, skipping quarantine removal"; REPLY="n"; }
     echo ""
     
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -73,7 +73,10 @@ fi
 
 # Check code signature
 echo "Checking code signature..."
-if codesign --verify --deep --strict "$APP_PATH" 2>/dev/null; then
+CODESIGN_ERROR=$(codesign --verify --deep --strict "$APP_PATH" 2>&1)
+CODESIGN_EXIT_CODE=$?
+
+if [ $CODESIGN_EXIT_CODE -eq 0 ]; then
     echo "✓ Code signature is valid"
     
     # Show signature details
@@ -86,6 +89,9 @@ if codesign --verify --deep --strict "$APP_PATH" 2>/dev/null; then
     fi
 else
     echo "⚠️  Code signature verification failed or app is unsigned"
+    if [ -n "$CODESIGN_ERROR" ]; then
+        echo "   Error details: $CODESIGN_ERROR"
+    fi
     echo "   You may need to approve in System Settings > Privacy & Security"
 fi
 
@@ -94,7 +100,10 @@ echo "Attempting to launch app..."
 echo ""
 
 # Try to open the app
-if open "$APP_PATH"; then
+OPEN_ERROR=$(open "$APP_PATH" 2>&1)
+OPEN_EXIT_CODE=$?
+
+if [ $OPEN_EXIT_CODE -eq 0 ]; then
     echo "✓ App launched successfully!"
     echo ""
     echo "If you see a security warning:"
@@ -104,6 +113,9 @@ if open "$APP_PATH"; then
     echo "4. Run this script again or open the app manually"
 else
     echo "❌ Failed to launch app"
+    if [ -n "$OPEN_ERROR" ]; then
+        echo "   Error: $OPEN_ERROR"
+    fi
     echo ""
     echo "Try these steps:"
     echo "1. Right-click the app in Finder and select 'Open'"
