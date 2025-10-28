@@ -403,7 +403,30 @@ class _HomePageState extends State<HomePage> {
 
       _showProgressDialog('Syncing Down', 'Downloading links from Kioju...');
 
-      final remote = await KiojuApi.listLinks(limit: 200, offset: 0);
+      // Fetch all links with pagination
+      List<Map<String, dynamic>> allRemoteLinks = [];
+      int offset = 0;
+      const int batchSize = 100; // API max limit
+
+      while (true) {
+        _updateProgressDialog(
+          'Downloading batch ${(offset / batchSize + 1).toInt()}...',
+        );
+
+        final batch = await KiojuApi.listLinks(
+          limit: batchSize,
+          offset: offset,
+        );
+        if (batch.isEmpty) break; // No more links
+
+        allRemoteLinks.addAll(batch);
+        offset += batchSize;
+
+        // If we got less than the batch size, we've reached the end
+        if (batch.length < batchSize) break;
+      }
+
+      final remote = allRemoteLinks;
 
       _updateProgressDialog('Processing ${remote.length} links...');
 
@@ -415,6 +438,8 @@ class _HomePageState extends State<HomePage> {
         final url = (m['url'] ?? m['link'] ?? '') as String;
         if (url.isEmpty) continue;
         final title = (m['title'] ?? '') as String?;
+        final description = (m['description'] ?? '') as String?;
+        final isPrivate = m['is_private'];
 
         // Improved tag parsing - extract slugs from tag objects
         final tags = _parseTagsFromApi(m['tags']);
@@ -423,12 +448,29 @@ class _HomePageState extends State<HomePage> {
         batch.insert('links', {
           'url': url,
           'title': (title?.isNotEmpty ?? false) ? title : null,
+          'notes': (description?.isNotEmpty ?? false) ? description : null,
           'tags': tags,
+          'is_private':
+              (isPrivate is bool
+                      ? isPrivate
+                      : (isPrivate == 1 || isPrivate == '1'))
+                  ? 1
+                  : 0,
           'remote_id': id.isNotEmpty ? id : null,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
         batch.rawUpdate(
-          'UPDATE links SET title=COALESCE(?, title), tags=COALESCE(?, tags), updated_at=CURRENT_TIMESTAMP WHERE remote_id=?',
-          [title, tags, id],
+          'UPDATE links SET title=COALESCE(?, title), notes=COALESCE(?, notes), tags=COALESCE(?, tags), is_private=COALESCE(?, is_private), updated_at=CURRENT_TIMESTAMP WHERE remote_id=?',
+          [
+            title,
+            description,
+            tags,
+            (isPrivate is bool
+                    ? isPrivate
+                    : (isPrivate == 1 || isPrivate == '1'))
+                ? 1
+                : 0,
+            id,
+          ],
         );
 
         processed++;
@@ -618,17 +660,31 @@ class _HomePageState extends State<HomePage> {
                     .toList(),
             isPrivate: isPrivate ? '1' : '0',
           );
-          final id =
-              (res['link_id'] ?? res['id'] ?? res['remote_id'] ?? '')
-                  .toString();
-          if (id.isNotEmpty) {
-            await database.update(
-              'links',
-              {'remote_id': id, 'updated_at': DateTime.now().toIso8601String()},
-              where: 'id=?',
-              whereArgs: [r['id']],
-            );
-            ok++;
+
+          // Check if the response indicates success
+          if (res['success'] == true) {
+            final id =
+                (res['link_id'] ?? res['id'] ?? res['remote_id'] ?? '')
+                    .toString();
+            if (id.isNotEmpty) {
+              await database.update(
+                'links',
+                {
+                  'remote_id': id,
+                  'updated_at': DateTime.now().toIso8601String(),
+                },
+                where: 'id=?',
+                whereArgs: [r['id']],
+              );
+              ok++;
+            } else {
+              // API returned success but no ID - this is unusual but not necessarily an error
+              ok++;
+            }
+          } else {
+            // API returned success=false
+            failed++;
+            lastError = res['message']?.toString() ?? 'Unknown API error';
           }
         } on RateLimitException catch (e) {
           // Stop processing if rate limited
@@ -653,8 +709,10 @@ class _HomePageState extends State<HomePage> {
         if (lastError != null &&
             (lastError.contains('Rate limited') ||
                 lastError.contains('Invalid') ||
-                lastError.contains('forbidden'))) {
-          // Show specific error for auth/rate limit issues
+                lastError.contains('forbidden') ||
+                lastError.contains('Authentication') ||
+                lastError.contains('Authorization'))) {
+          // Show specific error for auth/rate limit issues only
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(lastError),
@@ -678,16 +736,25 @@ class _HomePageState extends State<HomePage> {
                       ),
             ),
           );
-        } else {
-          // Show success/failure summary
-          String message = 'Pushed $ok links';
+        } else if (ok > 0 || failed == 0) {
+          // Show success message if any uploads succeeded or no failures
+          String message = 'Pushed $ok links successfully';
           if (failed > 0) {
-            message += ', $failed failed';
+            message += ' ($failed failed)';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(message),
-              backgroundColor: failed > 0 ? Colors.orange : null,
+              backgroundColor: failed > 0 ? Colors.orange : Colors.green,
+            ),
+          );
+        } else if (failed > 0 && ok == 0) {
+          // Only show error if everything failed and we have a specific error
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(lastError ?? 'Upload failed: Unknown error'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
           );
         }
@@ -1126,10 +1193,27 @@ class _HomePageState extends State<HomePage> {
                       color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Icon(
-                      Icons.link,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.link,
+                          size: 16,
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                        if (item.isPrivate) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.lock,
+                            size: 12,
+                            color:
+                                Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1156,6 +1240,22 @@ class _HomePageState extends State<HomePage> {
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (item.notes?.isNotEmpty == true) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            item.notes!,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),
