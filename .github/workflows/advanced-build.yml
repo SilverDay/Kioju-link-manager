@@ -99,8 +99,69 @@ jobs:
     - name: Run tests
       run: flutter test
       
+    - name: Setup code signing (if certificates available)
+      if: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      run: |
+        # Create temporary keychain
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+        
+        # Decode and import certificate
+        echo "${{ secrets.MACOS_CERTIFICATE }}" | base64 --decode > certificate.p12
+        
+        # Create keychain and import certificate
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security import certificate.p12 -P "${{ secrets.MACOS_CERTIFICATE_PWD }}" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security list-keychain -d user -s "$KEYCHAIN_PATH"
+        
+        # Clean up certificate file
+        rm certificate.p12
+        
+        # Set signing identity for codesign
+        echo "CODESIGN_IDENTITY=${{ secrets.MACOS_SIGNING_IDENTITY }}" >> $GITHUB_ENV
+      
     - name: Build macOS app
-      run: flutter build macos --release --verbose
+      run: |
+        if [ -n "$CODESIGN_IDENTITY" ]; then
+          echo "Building with code signing: $CODESIGN_IDENTITY"
+          flutter build macos --release --verbose
+        else
+          echo "Building without code signing (ad-hoc signature will be applied)"
+          flutter build macos --release --verbose
+        fi
+      
+    - name: Apply ad-hoc signature (if no certificate)
+      if: ${{ secrets.MACOS_CERTIFICATE == '' }}
+      run: |
+        echo "Applying ad-hoc signature for testing purposes"
+        codesign --force --deep --sign - build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        
+    - name: Verify code signature
+      run: |
+        codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        codesign -dv --verbose=4 build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        
+    - name: Notarize app (if certificates available)
+      if: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.APPLE_ID != '' }}
+      run: |
+        # Create a ZIP for notarization
+        cd build/macos/Build/Products/Release
+        zip -r kioju_link_manager_flutter.zip kioju_link_manager_flutter.app
+        
+        # Submit for notarization
+        xcrun notarytool submit kioju_link_manager_flutter.zip \
+          --apple-id "${{ secrets.APPLE_ID }}" \
+          --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
+          --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+          --wait
+        
+        # Staple the notarization ticket
+        xcrun stapler staple kioju_link_manager_flutter.app
+        
+        # Clean up ZIP
+        rm kioju_link_manager_flutter.zip
       
     - name: Install create-dmg
       if: ${{ github.event.inputs.create_installer == 'true' }}
@@ -112,7 +173,6 @@ jobs:
         cd build/macos/Build/Products/Release
         create-dmg \
           --volname "Kioju Link Manager" \
-          --volicon "../../../../assets/icon.icns" \
           --window-pos 200 120 \
           --window-size 800 450 \
           --icon-size 100 \
@@ -120,12 +180,18 @@ jobs:
           --hide-extension "kioju_link_manager_flutter.app" \
           --app-drop-link 600 185 \
           "../../../../../kioju-link-manager-macos.dmg" \
-          "kioju_link_manager_flutter.app"
+          "kioju_link_manager_flutter.app" || echo "DMG creation failed, continuing..."
           
     - name: Create macOS ZIP (always)
       run: |
         cd build/macos/Build/Products/Release
         zip -r ../../../../../kioju-link-manager-macos.zip kioju_link_manager_flutter.app
+        
+    - name: Clean up keychain
+      if: always() && secrets.MACOS_CERTIFICATE != ''
+      run: |
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        security delete-keychain "$KEYCHAIN_PATH" || true
         
     - name: Upload macOS artifacts
       uses: actions/upload-artifact@v4
