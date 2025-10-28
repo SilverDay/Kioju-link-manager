@@ -74,15 +74,16 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
     return Dialog(
       child: Container(
         width: 500,
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Fixed header
+            Container(
+              padding: const EdgeInsets.all(24),
+              child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
@@ -109,15 +110,23 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                   ),
                 ],
               ),
+            ),
 
-              const SizedBox(height: 24),
-
-              // URL Field
-              TextFormField(
-                controller: _urlController,
-                decoration: InputDecoration(
-                  labelText: 'URL *',
-                  hintText: 'https://example.com',
+            // Scrollable content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // URL Field
+                      TextFormField(
+                        controller: _urlController,
+                        decoration: InputDecoration(
+                          labelText: 'URL *',
+                          hintText: 'https://example.com',
                   prefixIcon: const Icon(Icons.link),
                   suffixIcon:
                       _isValidatingUrl
@@ -375,9 +384,16 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                 ),
                 const SizedBox(height: 24),
               ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
-              // Action Buttons
-              Row(
+            // Fixed footer with action buttons
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
@@ -398,8 +414,8 @@ class _AddLinkDialogState extends State<AddLinkDialog> {
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
