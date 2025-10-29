@@ -14,7 +14,7 @@
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.example.kiojuLinkManager</string>
+		<string>$(AppIdentifierPrefix)com.silverday.kiojuLinkManager</string>
 	</array>
 </dict>
 </plist>
