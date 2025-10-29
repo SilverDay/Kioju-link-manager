@@ -70,6 +70,11 @@ class KiojuApi {
   /// If secure storage fails (e.g., on macOS without proper entitlements), 
   /// automatically falls back to storing the token in the database config table.
   /// This ensures the token can always be saved, even when secure storage is unavailable.
+  /// 
+  /// **Security Note:** When using database fallback, the token is stored in plaintext
+  /// in the SQLite database, which is less secure than platform keychain storage.
+  /// However, the database is still protected by filesystem permissions and is only
+  /// used when secure storage is unavailable.
 
   static Future<void> setToken(String? token) async {
     if (token == null || token.isEmpty) {
@@ -180,6 +185,9 @@ class KiojuApi {
   }
 
   /// Saves the API token to the database config table
+  /// 
+  /// **Security Note:** The token is stored in plaintext in the database.
+  /// This method is only used as a fallback when secure storage is unavailable.
   static Future<void> _saveTokenToDb(String token) async {
     final db = await AppDb.instance();
     await db.insert(
