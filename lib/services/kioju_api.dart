@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:sqflite/sqflite.dart';
 import '../utils/security_utils.dart';
+import '../db.dart';
 
 /// Custom exception for rate limiting
 class RateLimitException implements Exception {
@@ -62,35 +64,77 @@ class KiojuApi {
   static DateTime? _lastRateLimitTime;
   static Duration? _rateLimitCooldown;
 
-  static Future<void> setToken(String? token) async {
-    try {
-      if (token == null || token.isEmpty) {
-        await _storage.delete(key: _tokenKey);
-      } else {
-        // Validate token before storing
-        final validation = SecurityUtils.validateApiToken(token);
-        if (!validation.isValid) {
-          throw ArgumentError('Invalid API token: ${validation.message}');
-        }
+  /// Sets the API token with automatic fallback storage
+  /// 
+  /// Tries to store the token in secure storage (keychain/credential manager) first.
+  /// If secure storage fails (e.g., on macOS without proper entitlements), 
+  /// automatically falls back to storing the token in the database config table.
+  /// This ensures the token can always be saved, even when secure storage is unavailable.
+  /// 
+  /// **Security Note:** When using database fallback, the token is stored in plaintext
+  /// in the SQLite database, which is less secure than platform keychain storage.
+  /// However, the database is still protected by filesystem permissions and is only
+  /// used when secure storage is unavailable.
 
-        // For macOS, we might need to configure secure storage options
-        await _storage.write(
-          key: _tokenKey,
-          value: validation.sanitizedValue,
-          aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-          iOptions: const IOSOptions(
-            accessibility: KeychainAccessibility.first_unlock_this_device,
-          ),
-          mOptions: const MacOsOptions(
-            accessibility: KeychainAccessibility.first_unlock_this_device,
-          ),
-          wOptions: const WindowsOptions(),
-          lOptions: const LinuxOptions(),
-        );
+  static Future<void> setToken(String? token) async {
+    if (token == null || token.isEmpty) {
+      // Delete from both secure storage and database
+      try {
+        await _storage.delete(key: _tokenKey);
+      } catch (e) {
+        // Ignore secure storage deletion errors
       }
+      try {
+        await _deleteTokenFromDb();
+      } catch (e) {
+        // Ignore database deletion errors
+      }
+      return;
+    }
+
+    // Validate token before storing
+    final validation = SecurityUtils.validateApiToken(token);
+    if (!validation.isValid) {
+      throw ArgumentError('Invalid API token: ${validation.message}');
+    }
+
+    final sanitizedToken = validation.sanitizedValue as String;
+
+    // Try secure storage first
+    bool secureStorageSucceeded = false;
+    try {
+      await _storage.write(
+        key: _tokenKey,
+        value: sanitizedToken,
+        aOptions: const AndroidOptions(encryptedSharedPreferences: true),
+        iOptions: const IOSOptions(
+          accessibility: KeychainAccessibility.first_unlock_this_device,
+        ),
+        mOptions: const MacOsOptions(
+          accessibility: KeychainAccessibility.first_unlock_this_device,
+        ),
+        wOptions: const WindowsOptions(),
+        lOptions: const LinuxOptions(),
+      );
+      secureStorageSucceeded = true;
     } catch (e) {
-      // Re-throw with more context for debugging
-      throw Exception('Failed to save API token: $e');
+      // Secure storage failed, will use database fallback
+    }
+
+    // If secure storage failed, use database as fallback
+    if (!secureStorageSucceeded) {
+      try {
+        await _saveTokenToDb(sanitizedToken);
+      } catch (e) {
+        throw Exception('Failed to save API token to both secure storage and database: $e');
+      }
+    } else {
+      // Secure storage succeeded, ensure database fallback is cleared
+      try {
+        await _deleteTokenFromDb();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
   }
 
@@ -104,10 +148,15 @@ class KiojuApi {
     }
   }
 
-  /// Helper method to read the token with consistent configuration
+  /// Helper method to read the token with automatic fallback
+  /// 
+  /// Tries to read from secure storage first, then falls back to database
+  /// if secure storage fails or returns null. This ensures token retrieval
+  /// works regardless of which storage method was used to save it.
   static Future<String?> _readToken() async {
+    // Try secure storage first
     try {
-      return await _storage.read(
+      final token = await _storage.read(
         key: _tokenKey,
         aOptions: const AndroidOptions(encryptedSharedPreferences: true),
         iOptions: const IOSOptions(
@@ -119,10 +168,58 @@ class KiojuApi {
         wOptions: const WindowsOptions(),
         lOptions: const LinuxOptions(),
       );
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
     } catch (e) {
-      // Silent failure - return null if secure storage is not available
+      // Secure storage failed, will try database fallback
+    }
+
+    // Fallback to database if secure storage failed or returned null
+    try {
+      return await _readTokenFromDb();
+    } catch (e) {
+      // Both storage methods failed
       return null;
     }
+  }
+
+  /// Saves the API token to the database config table
+  /// 
+  /// **Security Note:** The token is stored in plaintext in the database.
+  /// This method is only used as a fallback when secure storage is unavailable.
+  static Future<void> _saveTokenToDb(String token) async {
+    final db = await AppDb.instance();
+    await db.insert(
+      'config',
+      {'key': _tokenKey, 'value': token},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Reads the API token from the database config table
+  static Future<String?> _readTokenFromDb() async {
+    final db = await AppDb.instance();
+    final result = await db.query(
+      'config',
+      where: 'key = ?',
+      whereArgs: [_tokenKey],
+      limit: 1,
+    );
+    if (result.isNotEmpty) {
+      return result.first['value'] as String?;
+    }
+    return null;
+  }
+
+  /// Deletes the API token from the database config table
+  static Future<void> _deleteTokenFromDb() async {
+    final db = await AppDb.instance();
+    await db.delete(
+      'config',
+      where: 'key = ?',
+      whereArgs: [_tokenKey],
+    );
   }
 
   /// Gets rate limit status information
