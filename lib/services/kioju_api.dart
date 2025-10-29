@@ -64,6 +64,13 @@ class KiojuApi {
   static DateTime? _lastRateLimitTime;
   static Duration? _rateLimitCooldown;
 
+  /// Sets the API token with automatic fallback storage
+  /// 
+  /// Tries to store the token in secure storage (keychain/credential manager) first.
+  /// If secure storage fails (e.g., on macOS without proper entitlements), 
+  /// automatically falls back to storing the token in the database config table.
+  /// This ensures the token can always be saved, even when secure storage is unavailable.
+
   static Future<void> setToken(String? token) async {
     if (token == null || token.isEmpty) {
       // Delete from both secure storage and database
@@ -136,7 +143,11 @@ class KiojuApi {
     }
   }
 
-  /// Helper method to read the token with consistent configuration
+  /// Helper method to read the token with automatic fallback
+  /// 
+  /// Tries to read from secure storage first, then falls back to database
+  /// if secure storage fails or returns null. This ensures token retrieval
+  /// works regardless of which storage method was used to save it.
   static Future<String?> _readToken() async {
     // Try secure storage first
     try {
