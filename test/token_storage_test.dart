@@ -1,15 +1,40 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kioju_link_manager/services/kioju_api.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
+class FakePathProviderPlatform extends Fake
+    with MockPlatformInterfaceMixin
+    implements PathProviderPlatform {
+  String? _path;
+  
+  @override
+  Future<String?> getApplicationSupportPath() async {
+    _path ??= await Directory.systemTemp.createTemp('kioju_test').then((dir) => dir.path);
+    return _path;
+  }
+}
 
 void main() {
   // Initialize FFI for testing
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    PathProviderPlatform.instance = FakePathProviderPlatform();
   });
 
   group('API Token Storage Fallback', () {
+    // Clean up after each test by clearing the token
+    tearDown(() async {
+      try {
+        await KiojuApi.setToken(null);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    });
+
     test('setToken should validate and store token', () async {
       // This test ensures that the token can be set
       // In a real environment, it would use either secure storage or database
