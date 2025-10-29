@@ -12,5 +12,9 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.example.kiojuLinkManager</string>
+	</array>
 </dict>
 </plist>
