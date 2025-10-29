@@ -16,5 +16,9 @@
 	<array>
 		<string>$(AppIdentifierPrefix)com.silverday.kiojuLinkManager</string>
 	</array>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(TeamIdentifierPrefix)com.silverday.kiojuLinkManager</string>
+	</array>
 </dict>
 </plist>
