@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import '../db.dart';
 import '../models/link.dart';
 import '../utils/bookmark_export.dart';
 import '../utils/bookmark_import.dart';
-import '../services/kioju_api.dart';
-import '../services/import_service.dart';
+import '../services/link_service.dart';
 
 class LinkSelectionItem {
   final String url;
@@ -90,11 +90,13 @@ class LinkSelectionItem {
 class LinkSelectionPage extends StatefulWidget {
   final List<LinkSelectionItem>? initialBrowserLinks;
   final List<LinkSelectionItem>? initialKiojuLinks;
+  final List<ImportedBookmark>? importedBookmarks;
 
   const LinkSelectionPage({
     super.key,
     this.initialBrowserLinks,
     this.initialKiojuLinks,
+    this.importedBookmarks,
   });
 
   @override
@@ -110,7 +112,17 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
   @override
   void initState() {
     super.initState();
-    browserLinks = widget.initialBrowserLinks ?? [];
+
+    // Convert imported bookmarks if provided
+    if (widget.importedBookmarks != null) {
+      browserLinks =
+          widget.importedBookmarks!
+              .map((bookmark) => LinkSelectionItem.fromImported(bookmark))
+              .toList();
+    } else {
+      browserLinks = widget.initialBrowserLinks ?? [];
+    }
+
     kiojuLinks = widget.initialKiojuLinks ?? [];
 
     // Always load Kioju links if not provided
@@ -123,16 +135,23 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     setState(() => isLoading = true);
 
     try {
-      final remote = await KiojuApi.listLinks(limit: 500, offset: 0);
+      // Load from local database instead of API to show existing links
+      final db = await AppDb.instance();
+      final rows = await db.query('links', orderBy: 'created_at DESC');
+
       final items =
-          remote.map((m) => LinkSelectionItem.fromApiResponse(m)).toList();
+          rows.map((row) {
+            final link = LinkItem.fromMap(row);
+            return LinkSelectionItem.fromKioju(link);
+          }).toList();
+
       setState(() {
         kiojuLinks = items;
       });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load Kioju links: $e')),
+          SnackBar(content: Text('Failed to load existing links: $e')),
         );
       }
     } finally {
@@ -275,7 +294,47 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                 Column(
                   children: [
                     Expanded(
-                      child: _buildLinkList(filteredBrowserLinks, 'browser'),
+                      child: DragTarget<LinkSelectionItem>(
+                        onWillAcceptWithDetails: (details) {
+                          // Accept items from Kioju to export
+                          return kiojuLinks.contains(details.data);
+                        },
+                        onAcceptWithDetails: (details) {
+                          // Browser side accepts Kioju links for export
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Use the export button to save Kioju links',
+                              ),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        builder: (context, candidateData, rejectedData) {
+                          return Container(
+                            decoration:
+                                candidateData.isNotEmpty
+                                    ? BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                          .withValues(alpha: 0.1),
+                                      border: Border.all(
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                        width: 2,
+                                      ),
+                                    )
+                                    : null,
+                            child: _buildLinkList(
+                              filteredBrowserLinks,
+                              'browser',
+                            ),
+                          );
+                        },
+                      ),
                     ),
                     if (_getSelectedBrowserLinks().isNotEmpty)
                       Container(
@@ -312,10 +371,82 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                 Column(
                   children: [
                     Expanded(
-                      child:
-                          isLoading && kiojuLinks.isEmpty
-                              ? const Center(child: CircularProgressIndicator())
-                              : _buildLinkList(filteredKiojuLinks, 'kioju'),
+                      child: DragTarget<LinkSelectionItem>(
+                        onWillAcceptWithDetails: (details) {
+                          // Accept items from browser to import
+                          return browserLinks.contains(details.data);
+                        },
+                        onAcceptWithDetails: (details) async {
+                          // Import the dropped link
+                          final item = details.data;
+                          setState(() => isLoading = true);
+
+                          try {
+                            await LinkService.instance.createLink(
+                              url: item.url,
+                              title:
+                                  item.title == 'Untitled Link'
+                                      ? null
+                                      : item.title,
+                              tags: item.tags,
+                              collection: item.collection,
+                              isPrivate: true,
+                            );
+
+                            // Reload Kioju links
+                            await _loadKiojuLinks();
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Imported "${item.title}"'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to import: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } finally {
+                            setState(() => isLoading = false);
+                          }
+                        },
+                        builder: (context, candidateData, rejectedData) {
+                          return Container(
+                            decoration:
+                                candidateData.isNotEmpty
+                                    ? BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer
+                                          .withValues(alpha: 0.1),
+                                      border: Border.all(
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                        width: 2,
+                                      ),
+                                    )
+                                    : null,
+                            child:
+                                isLoading && kiojuLinks.isEmpty
+                                    ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                    : _buildLinkList(
+                                      filteredKiojuLinks,
+                                      'kioju',
+                                    ),
+                          );
+                        },
+                      ),
                     ),
                     if (_getSelectedKiojuLinks().isNotEmpty)
                       Container(
@@ -414,7 +545,42 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                   ],
                 ),
               ),
-              Expanded(child: _buildLinkList(filteredBrowserLinks, 'browser')),
+              Expanded(
+                child: DragTarget<LinkSelectionItem>(
+                  onWillAcceptWithDetails: (details) {
+                    // Accept items from Kioju to export
+                    return kiojuLinks.contains(details.data);
+                  },
+                  onAcceptWithDetails: (details) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Use the export button to save Kioju links',
+                        ),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  builder: (context, candidateData, rejectedData) {
+                    return Container(
+                      decoration:
+                          candidateData.isNotEmpty
+                              ? BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer
+                                    .withValues(alpha: 0.1),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 2,
+                                ),
+                              )
+                              : null,
+                      child: _buildLinkList(filteredBrowserLinks, 'browser'),
+                    );
+                  },
+                ),
+              ),
               // Copy to Kioju button
               if (_getSelectedBrowserLinks().isNotEmpty)
                 Container(
@@ -508,10 +674,72 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
                 ),
               ),
               Expanded(
-                child:
-                    isLoading && kiojuLinks.isEmpty
-                        ? const Center(child: CircularProgressIndicator())
-                        : _buildLinkList(filteredKiojuLinks, 'kioju'),
+                child: DragTarget<LinkSelectionItem>(
+                  onWillAcceptWithDetails: (details) {
+                    // Accept items from browser to import
+                    return browserLinks.contains(details.data);
+                  },
+                  onAcceptWithDetails: (details) async {
+                    // Import the dropped link
+                    final item = details.data;
+                    setState(() => isLoading = true);
+
+                    try {
+                      await LinkService.instance.createLink(
+                        url: item.url,
+                        title:
+                            item.title == 'Untitled Link' ? null : item.title,
+                        tags: item.tags,
+                        collection: item.collection,
+                        isPrivate: true,
+                      );
+
+                      // Reload Kioju links
+                      await _loadKiojuLinks();
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Imported "${item.title}"'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to import: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    } finally {
+                      setState(() => isLoading = false);
+                    }
+                  },
+                  builder: (context, candidateData, rejectedData) {
+                    return Container(
+                      decoration:
+                          candidateData.isNotEmpty
+                              ? BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer
+                                    .withValues(alpha: 0.1),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  width: 2,
+                                ),
+                              )
+                              : null,
+                      child:
+                          isLoading && kiojuLinks.isEmpty
+                              ? const Center(child: CircularProgressIndicator())
+                              : _buildLinkList(filteredKiojuLinks, 'kioju'),
+                    );
+                  },
+                ),
               ),
               // Copy to Bookmarks button
               if (_getSelectedKiojuLinks().isNotEmpty)
@@ -576,12 +804,13 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: links.length,
-      itemBuilder: (context, index) => _buildLinkSelectionCard(links[index]),
+      itemBuilder:
+          (context, index) => _buildLinkSelectionCard(links[index], source),
     );
   }
 
-  Widget _buildLinkSelectionCard(LinkSelectionItem item) {
-    return Container(
+  Widget _buildLinkSelectionCard(LinkSelectionItem item, String source) {
+    final card = Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color:
@@ -666,6 +895,69 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
         controlAffinity: ListTileControlAffinity.leading,
       ),
     );
+
+    // Make browser links draggable to Kioju, and Kioju links draggable to export
+    return Draggable<LinkSelectionItem>(
+      data: item,
+      feedback: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(8),
+        child: Opacity(
+          opacity: 0.8,
+          child: Container(
+            width: 300,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary,
+                width: 2,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      source == 'browser' ? Icons.web : Icons.cloud,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.url,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: card),
+      child: card,
+    );
   }
 
   void _selectAll(List<LinkSelectionItem> links) {
@@ -699,32 +991,27 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     // Show loading state
     setState(() => isLoading = true);
 
+    int successCount = 0;
+    int failureCount = 0;
+
     try {
-      // Convert selected links to ImportedBookmark format
-      final importedBookmarks = selectedLinks.map((item) => ImportedBookmark(
-        item.url,
-        title: item.title == 'Untitled Link' ? null : item.title,
-        collection: item.collection,
-        tags: item.tags,
-      )).toList();
+      // Import each link using LinkService which respects sync settings
+      for (final item in selectedLinks) {
+        try {
+          await LinkService.instance.createLink(
+            url: item.url,
+            title: item.title == 'Untitled Link' ? null : item.title,
+            tags: item.tags,
+            collection: item.collection,
+            isPrivate: true,
+          );
+          successCount++;
+        } catch (e) {
+          failureCount++;
+        }
+      }
 
-      // Create a mock ImportResult for the import service
-      final importResult = ImportResult(
-        bookmarks: importedBookmarks,
-        collectionsCreated: [],
-        collectionConflicts: [],
-        conflictResolutions: {},
-      );
-
-      // Use the import service to handle sync strategy
-      final importSyncResult = await ImportService.instance.importLinksWithSync(
-        importResult,
-        (completed, total) {
-          // Progress callback - could update UI if needed
-        },
-      );
-
-      // Clear selections and show success message
+      // Clear selections and reload Kioju links
       setState(() {
         for (final link in selectedLinks) {
           link.isSelected = false;
@@ -732,26 +1019,28 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
         isLoading = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(importSyncResult.statusMessage),
-            backgroundColor: importSyncResult.isCompleteSuccess ? Colors.green : Colors.orange,
-          ),
-        );
+      // Reload Kioju links to show newly imported items
+      await _loadKiojuLinks();
 
-        // Return import results to parent
-        Navigator.of(context).pop({
-          'imported': true,
-          'count': importSyncResult.totalLinksProcessed,
-        });
-      }
+      if (!mounted) return;
+
+      final message =
+          failureCount == 0
+              ? 'Successfully imported $successCount links'
+              : 'Imported $successCount links ($failureCount failed)';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: failureCount == 0 ? Colors.green : Colors.orange,
+        ),
+      );
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to copy links: $e'),
+            content: Text('Failed to import links: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -824,7 +1113,6 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
   }
 
   // Helper methods for file operations
-
   String _exportToNetscapeHtml(List<LinkItem> links) {
     return exportToNetscapeHtml(links);
   }

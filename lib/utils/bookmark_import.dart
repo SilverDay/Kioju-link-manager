@@ -211,21 +211,39 @@ Future<ImportResult> importFromNetscapeHtml(
   final doc = html_parser.parse(html);
   final body = doc.body;
 
-  late Future<void> Function(dom.Element, List<String>) walkElement;
+  // Track processed elements to avoid infinite loops
+  final processed = <dom.Element>{};
 
-  Future<List<dom.Element>> processDt(
-    dom.Element dt,
-    List<String> segments,
-  ) async {
-    final consumed = <dom.Element>[];
+  late Future<void> Function(dom.Element, List<String>) walkElement;
+  late Future<void> Function(dom.Element, List<String>) processDt;
+
+  processDt = (dom.Element dt, List<String> segments) async {
+    if (processed.contains(dt)) {
+      return;
+    }
+    processed.add(dt);
+
+    // Check if this DT contains a folder (H3)
     dom.Element? folderHeader;
+    dom.Element? nestedDl;
+
     for (final child in dt.children) {
       if (child.localName == 'h3') {
         folderHeader = child;
-        break;
+      } else if (child.localName == 'dl') {
+        nestedDl = child;
       }
     }
 
+    // If no nested DL found in children, check next sibling
+    if (nestedDl == null) {
+      dom.Element? sibling = dt.nextElementSibling;
+      if (sibling?.localName == 'dl') {
+        nestedDl = sibling;
+      }
+    }
+
+    // This is a folder
     if (folderHeader != null) {
       final folderValidation = SecurityUtils.validateTitle(folderHeader.text);
       if (folderValidation.isValid) {
@@ -238,25 +256,24 @@ Future<ImportResult> importFromNetscapeHtml(
           final nextSegments =
               resolved == null ? segments : resolved.split('/');
 
-          final nestedDl = _resolveNestedDl(dt);
           if (nestedDl != null) {
-            consumed.add(nestedDl);
             await walkElement(nestedDl, nextSegments);
           }
-          return consumed;
+          return;
         }
       }
 
-      final nestedDl = _resolveNestedDl(dt);
+      // Invalid folder name, but still process nested content
       if (nestedDl != null) {
-        consumed.add(nestedDl);
         await walkElement(nestedDl, segments);
       }
-      return consumed;
+      return;
     }
 
+    // This is a bookmark (has an anchor tag)
     final anchor = _firstAnchor(dt);
     if (anchor != null) {
+      processed.add(anchor); // Mark anchor as processed
       final bookmark = _bookmarkFromAnchor(
         anchor,
         segments.isEmpty ? null : segments.join('/'),
@@ -264,40 +281,27 @@ Future<ImportResult> importFromNetscapeHtml(
       if (bookmark != null) {
         bookmarks.add(bookmark);
       }
-      return consumed;
     }
-
-    final nestedDl = _resolveNestedDl(dt);
-    if (nestedDl != null) {
-      consumed.add(nestedDl);
-      await walkElement(nestedDl, segments);
-    }
-    return consumed;
-  }
+  };
 
   walkElement = (dom.Element element, List<String> segments) async {
-    if (element.localName == 'dl') {
-      final processed = <dom.Element>{};
-      for (final child in element.children) {
-        if (processed.contains(child)) {
-          continue;
-        }
-        if (child.localName == 'dt') {
-          final consumed = await processDt(child, segments);
-          processed.addAll(consumed);
-          continue;
-        }
+    // Prevent infinite loops by tracking processed elements
+    if (processed.contains(element)) {
+      return;
+    }
+    processed.add(element);
 
-        await walkElement(child, segments);
+    // Handle DL (definition list) - contains folders/bookmarks
+    if (element.localName == 'dl') {
+      for (final child in element.children) {
+        if (child.localName == 'dt') {
+          await processDt(child, segments);
+        }
       }
       return;
     }
 
-    if (element.localName == 'dt') {
-      await processDt(element, segments);
-      return;
-    }
-
+    // Recursively process children for other elements
     for (final child in element.children) {
       await walkElement(child, segments);
     }
@@ -306,18 +310,31 @@ Future<ImportResult> importFromNetscapeHtml(
   if (body != null) {
     await walkElement(body, const []);
 
+    // Fallback: if no bookmarks found through structure, try finding all anchors
     if (bookmarks.isEmpty) {
       for (final anchor in body.querySelectorAll('a[href]')) {
-        final bookmark = _bookmarkFromAnchor(anchor, null);
-        if (bookmark != null) {
-          bookmarks.add(bookmark);
+        if (!processed.contains(anchor)) {
+          final bookmark = _bookmarkFromAnchor(anchor, null);
+          if (bookmark != null) {
+            bookmarks.add(bookmark);
+          }
         }
       }
     }
   }
 
+  // Deduplicate bookmarks by URL (keep first occurrence)
+  final seenUrls = <String>{};
+  final dedupedBookmarks = <ImportedBookmark>[];
+  for (final bookmark in bookmarks) {
+    if (!seenUrls.contains(bookmark.url)) {
+      seenUrls.add(bookmark.url);
+      dedupedBookmarks.add(bookmark);
+    }
+  }
+
   return ImportResult(
-    bookmarks: bookmarks,
+    bookmarks: dedupedBookmarks,
     collectionsCreated: helper.collectionsCreated.toList(),
     collectionConflicts: helper.collectionConflicts.toList(),
     conflictResolutions: helper.conflictResolutions,
@@ -417,8 +434,18 @@ Future<ImportResult> importFromChromeJson(
     }
   }
 
+  // Deduplicate bookmarks by URL (keep first occurrence)
+  final seenUrls = <String>{};
+  final dedupedBookmarks = <ImportedBookmark>[];
+  for (final bookmark in bookmarks) {
+    if (!seenUrls.contains(bookmark.url)) {
+      seenUrls.add(bookmark.url);
+      dedupedBookmarks.add(bookmark);
+    }
+  }
+
   return ImportResult(
-    bookmarks: bookmarks,
+    bookmarks: dedupedBookmarks,
     collectionsCreated: helper.collectionsCreated.toList(),
     collectionConflicts: helper.collectionConflicts.toList(),
     conflictResolutions: helper.conflictResolutions,
@@ -431,24 +458,6 @@ dom.Element? _firstAnchor(dom.Element element) {
       return child;
     }
   }
-  return null;
-}
-
-dom.Element? _resolveNestedDl(dom.Element dt) {
-  for (final child in dt.children) {
-    if (child.localName == 'dl') {
-      return child;
-    }
-  }
-
-  dom.Element? sibling = dt.nextElementSibling;
-  while (sibling != null) {
-    if (sibling.localName == 'dl') {
-      return sibling;
-    }
-    sibling = sibling.nextElementSibling;
-  }
-
   return null;
 }
 

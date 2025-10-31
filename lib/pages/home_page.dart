@@ -12,7 +12,6 @@ import '../services/sync_settings.dart';
 import '../services/link_service.dart';
 
 import '../utils/bookmark_import.dart';
-import '../services/import_service.dart';
 import '../widgets/add_link_dialog.dart';
 import '../widgets/bulk_operations_dialog.dart';
 import '../widgets/collection_tree_widget.dart';
@@ -20,8 +19,6 @@ import '../widgets/create_collection_dialog.dart';
 import '../widgets/delete_collection_dialog.dart';
 import '../widgets/edit_collection_dialog.dart';
 import '../widgets/enhanced_search_bar.dart';
-import '../widgets/import_conflict_dialog.dart';
-import '../widgets/import_summary_dialog.dart';
 import '../widgets/sync_conflict_dialog.dart';
 import 'link_selection_page.dart';
 import 'settings_page.dart';
@@ -445,27 +442,28 @@ class _HomePageState extends State<HomePage> {
       final path = xfile.path;
       final text = await xfile.readAsString();
 
-      _updateProgressDialog('Parsing bookmarks and creating collections...');
+      _updateProgressDialog('Parsing bookmarks...');
 
-      // First pass: Parse bookmarks and handle collection conflicts
-      ImportResult initialResult;
+      // Parse bookmarks without creating collections automatically
+      ImportResult importResult;
       if (path.endsWith('.html') ||
           text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
-        initialResult = await importFromNetscapeHtml(
+        importResult = await importFromNetscapeHtml(
           text,
-          createCollections: true,
+          createCollections: false, // Don't auto-create, let user choose
         );
       } else if (path.endsWith('.json')) {
-        initialResult = await importFromChromeJson(
+        importResult = await importFromChromeJson(
           jsonDecode(text),
-          createCollections: true,
+          createCollections: false, // Don't auto-create, let user choose
         );
       } else {
         throw Exception('Unsupported file format');
       }
 
-      if (initialResult.bookmarks.isEmpty) {
-        _hideProgressDialog();
+      _hideProgressDialog();
+
+      if (importResult.bookmarks.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -476,72 +474,18 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      // Handle collection conflicts if any
-      Map<String, String>? collectionMappings;
-      if (initialResult.collectionConflicts.isNotEmpty) {
-        _hideProgressDialog();
-
-        if (mounted) {
-          await showDialog<void>(
-            context: context,
-            builder:
-                (context) => ImportConflictDialog(
-                  conflictingCollections: initialResult.collectionConflicts,
-                  onResolved: (resolutions) {
-                    collectionMappings = resolutions;
-                  },
-                ),
-          );
-        }
-
-        // If user cancelled conflict resolution, abort import
-        if (collectionMappings == null) {
-          return;
-        }
-      }
-
-      // Second pass: Import with sync strategy
-      _updateProgressDialog(
-        'Importing ${initialResult.bookmarks.length} links...',
-      );
-
-      ImportSyncResult importSyncResult;
-      if (path.endsWith('.html') ||
-          text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
-        importSyncResult = await ImportService.instance.importFromHtml(
-          text,
-          createCollections: true,
-          collectionNameMappings: collectionMappings,
-          onProgress: (completed, total) {
-            _updateProgressDialog('Importing links... ($completed/$total)');
-          },
-        );
-      } else {
-        importSyncResult = await ImportService.instance.importFromJson(
-          jsonDecode(text),
-          createCollections: true,
-          collectionNameMappings: collectionMappings,
-          onProgress: (completed, total) {
-            _updateProgressDialog('Importing links... ($completed/$total)');
-          },
-        );
-      }
-
-      _hideProgressDialog();
-
-      // Show import summary with sync results
+      // Navigate to LinkSelectionPage for selective import
       if (mounted) {
-        await showDialog<void>(
-          context: context,
-          builder:
-              (context) => ImportSummaryDialog(
-                importResult: importSyncResult.importResult,
-                linksImported: importSyncResult.totalLinksProcessed,
-                syncResult: importSyncResult,
-              ),
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder:
+                (context) => LinkSelectionPage(
+                  importedBookmarks: importResult.bookmarks,
+                ),
+          ),
         );
 
-        // Always refresh after import
+        // Refresh after returning from import page
         await _refresh();
       }
     } catch (e) {

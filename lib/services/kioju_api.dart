@@ -913,10 +913,7 @@ class KiojuApi {
     final token = await _readToken();
 
     final uri = Uri.parse(_baseUrl).replace(
-      queryParameters: {
-        'action': 'collections_get_links',
-        'collection_id': sanitizedId,
-      },
+      queryParameters: {'action': 'collections_get_links', 'id': sanitizedId},
     );
 
     final headers = <String, String>{

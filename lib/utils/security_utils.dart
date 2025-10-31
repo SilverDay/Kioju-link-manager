@@ -255,9 +255,22 @@ class SecurityUtils {
       return ValidationResult(false, 'HTML content is too large');
     }
 
-    // Check for suspicious content
+    // For bookmark imports, we're more lenient since bookmark HTML files
+    // often contain event handlers and other attributes that would normally
+    // be considered suspicious. We only check for truly dangerous patterns.
     final lowerContent = htmlContent.toLowerCase();
-    for (final pattern in _suspiciousPatterns) {
+
+    // Only check for the most dangerous patterns that wouldn't appear in bookmark files
+    final dangerousPatterns = [
+      'eval(',
+      'document.cookie',
+      'vbscript:',
+      '<iframe',
+      '<embed',
+      '<object',
+    ];
+
+    for (final pattern in dangerousPatterns) {
       if (lowerContent.contains(pattern.toLowerCase())) {
         return ValidationResult(
           false,

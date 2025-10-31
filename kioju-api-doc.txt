@@ -1,591 +1,75 @@
-# Kioju API Documentation
-
-The Kioju API provides programmatic access to your link management features. All API requests require authentication via API key.
-
-## Authentication
-
-Include your API key in the request header:
-```
-X-Api-Key: your-api-key-here
-```
-
-Get your API key from your Kioju profile page at https://kioju.de/
-
-## Endpoints
-
-Base URL: `https://kioju.de/api/api.php`
-
-## Available Actions
-
-### 1. Add Link (Free Feature) ✅
-
-**Action**: `add`  
-**Method**: POST  
-**Available to**: All users (Free, Premium, Admin)
-
-Add a new link to your Kioju account.
-
-**Parameters:**
-- `action=add` (required)
-- `url` (required) - The URL to add
-- `title` (optional) - Custom title for the link
-- `description` (optional) - Custom description
-
-**Rate Limits:**
-- Free users: 25 submissions/hour
-- Premium users: 100 submissions/hour
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d "action=add&url=https://example.com&title=Example Site"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Link added successfully",
-  "link_id": 123
-}
-```
-
-### 2. List Links (Premium Feature) 💎
-
-**Action**: `list`  
-**Method**: GET or POST  
-**Available to**: Premium users and Admins only
-
-Retrieve all your links from Kioju.
-
-**Parameters:**
-- `action=list` (required)
-
-**Example:**
-```bash
-curl https://kioju.de/api/api.php?action=list \
-  -H "X-Api-Key: your-api-key"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "links": [
-    {
-      "id": 123,
-      "url": "https://example.com",
-      "title": "Example Site",
-      "description": "A great example website",
-      "created_at": "2025-08-08 12:00:00",
-      "is_private": 0,
-      "is_shadowbanned": 0
-    }
-  ]
-}
-```
-
-### 3. Update Link (Premium Feature) 💎
-
-**Action**: `update`  
-**Method**: POST (recommended)  
-**Available to**: Premium users and Admins only
-
-Update the metadata of an existing link you own. The original URL cannot be changed through the API.
-
-**Parameters:**
-- `action=update` (required)
-- `id` (required) – Link ID to update
-- `title` (optional) – New title (1–255 characters). Required if supplied; empty titles are rejected.
-- `description` (optional) – New description. Send an empty string to clear the description.
-- `is_private` (optional) – `1` for private, `0` for public.
-- `tags` (optional) – Comma-separated list or JSON array of tags (max 12). Include the field with an empty value to remove all tags.
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d 'action=update&id=123&title=New+Title&description=Updated+notes&is_private=0&tags=["research","articles"]'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "link": {
-    "id": 123,
-    "url": "https://example.com",
-    "title": "New Title",
-    "description": "Updated notes",
-    "created_at": "2025-08-08 12:00:00",
-    "is_private": 0,
-    "is_shadowbanned": 0,
-    "tags": [
-      { "id": 17, "name": "research", "slug": "research" },
-      { "id": 42, "name": "articles", "slug": "articles" }
-    ]
-  },
-  "updated_fields": ["title", "description", "is_private", "tags"]
-}
-```
-
-### 4. Delete Link (Premium Feature) 💎
-
-**Action**: `delete`  
-**Method**: POST  
-**Available to**: Premium users and Admins only
-
-Delete a link from your Kioju account.
-
-**Parameters:**
-- `action=delete` (required)
-- `id` (required) - The link ID to delete
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d "action=delete&id=123"
-```
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-### 5. Check Premium Status ✅
-
-**Action**: `premium_status`  
-**Method**: GET or POST  
-**Available to**: All authenticated users
-
-Returns whether the API key belongs to a Premium account. Useful for desktop or native apps to enable/disable premium-only features without a round trip to other endpoints.
-
-**Parameters:**
-- `action=premium_status` (required)
-
-**Example:**
-```bash
-curl https://kioju.de/api/api.php?action=premium_status \
-  -H "X-Api-Key: your-api-key"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "is_premium": true,
-  "plan": "premium",
-  "feature_access": {
-    "list": true,
-    "delete": true,
-    "update": true,
-    "collections": true,
-    "collection_management": {
-      "collections_list": true,
-      "collections_create": true,
-      "collections_update": true,
-      "collections_delete": true,
-      "collections_assign_link": true,
-      "collections_get_links": true,
-      "collections_get_uncategorized": true
-    }
-  }
-}
-```
-
-## Collection Management (Premium Feature) 💎
-
-The following endpoints provide comprehensive collection management capabilities for Premium users.
-
-### 6. List Collections 💎
-
-**Action**: `collections_list`  
-**Method**: GET or POST  
-**Available to**: Premium users and Admins only
-
-Retrieve all collections owned by the authenticated user, including metadata and link counts.
-
-**Parameters:**
-- `action=collections_list` (required)
-
-**Example:**
-```bash
-curl https://kioju.de/api/api.php?action=collections_list \
-  -H "X-Api-Key: your-api-key"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "collections": [
-    {
-      "id": 123,
-      "name": "Development Tools",
-      "slug": "development-tools",
-      "description": "My favorite development resources",
-      "visibility": "public",
-      "created_at": "2024-01-15 10:30:00",
-      "updated_at": "2024-01-20 14:45:00",
-      "link_count": 15,
-      "public_link_count": 12,
-      "tags": [
-        {"id": 1, "name": "Programming", "slug": "programming"},
-        {"id": 2, "name": "Tools", "slug": "tools"}
-      ]
-    }
-  ],
-  "uncategorized_count": 8,
-  "total_links": 23
-}
-```
-
-### 7. Create Collection 💎
-
-**Action**: `collections_create`  
-**Method**: POST  
-**Available to**: Premium users and Admins only
-
-Create a new collection for organizing links.
-
-**Parameters:**
-- `action=collections_create` (required)
-- `name` (required) - Collection name (max 100 characters)
-- `description` (optional) - Collection description (max 2000 characters)
-- `visibility` (optional) - `private`, `hidden`, or `public` (default: `public`)
-- `tags` (optional) - JSON array of tag names
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d 'action=collections_create&name=My+Collection&description=A+great+collection&visibility=public&tags=["productivity","tools"]'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "collection": {
-    "id": 124,
-    "name": "My Collection",
-    "slug": "my-collection",
-    "description": "A great collection",
-    "visibility": "public",
-    "created_at": "2024-01-25 09:15:00",
-    "updated_at": "2024-01-25 09:15:00",
-    "link_count": 0,
-    "public_link_count": 0,
-    "tags": [
-      {"id": 3, "name": "productivity", "slug": "productivity"},
-      {"id": 4, "name": "tools", "slug": "tools"}
-    ]
-  }
-}
-```
-
-### 8. Update Collection 💎
-
-**Action**: `collections_update`  
-**Method**: POST  
-**Available to**: Premium users and Admins only
-
-Update an existing collection's metadata. Supports partial updates.
-
-**Parameters:**
-- `action=collections_update` (required)
-- `id` (required) - Collection ID to update
-- `name` (optional) - New collection name
-- `description` (optional) - New description
-- `visibility` (optional) - New visibility setting
-- `tags` (optional) - JSON array of tag names (replaces existing tags)
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d 'action=collections_update&id=124&name=Updated+Collection&visibility=private'
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "collection": {
-    "id": 124,
-    "name": "Updated Collection",
-    "slug": "updated-collection",
-    "description": "A great collection",
-    "visibility": "private",
-    "created_at": "2024-01-25 09:15:00",
-    "updated_at": "2024-01-25 10:30:00",
-    "link_count": 0,
-    "public_link_count": 0,
-    "tags": []
-  },
-  "updated_fields": ["name", "visibility"]
-}
-```
-
-### 9. Delete Collection 💎
-
-**Action**: `collections_delete`  
-**Method**: POST  
-**Available to**: Premium users and Admins only
-
-Delete a collection with options for handling associated links.
-
-**Parameters:**
-- `action=collections_delete` (required)
-- `id` (required) - Collection ID to delete
-- `delete_mode` (optional) - `move_links` (default, safer) or `delete_links` (permanent)
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d "action=collections_delete&id=124&delete_mode=move_links"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Collection 'Updated Collection' deleted successfully. 5 links moved to uncategorized.",
-  "deleted_collection_id": 124,
-  "affected_links": 5,
-  "delete_mode": "move_links"
-}
-```
-
-### 10. Assign Link to Collection 💎
-
-**Action**: `collections_assign_link`  
-**Method**: POST  
-**Available to**: Premium users and Admins only
-
-Assign a link to a collection or move it to uncategorized.
-
-**Parameters:**
-- `action=collections_assign_link` (required)
-- `link_id` (required) - Link ID to assign
-- `collection_id` (optional) - Collection ID (omit or use empty string for uncategorized)
-
-**Example:**
-```bash
-curl -X POST https://kioju.de/api/api.php \
-  -H "X-Api-Key: your-api-key" \
-  -d "action=collections_assign_link&link_id=456&collection_id=123"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "link": {
-    "id": 456,
-    "url": "https://example.com",
-    "title": "Example Link",
-    "collection_id": 123,
-    "collection_name": "Development Tools"
-  }
-}
-```
-
-### 11. Get Collection Links 💎
-
-**Action**: `collections_get_links`  
-**Method**: GET or POST  
-**Available to**: Premium users and Admins only
-
-Retrieve all links within a specific collection.
-
-**Parameters:**
-- `action=collections_get_links` (required)
-- `id` (required) - Collection ID
-
-**Example:**
-```bash
-curl https://kioju.de/api/api.php?action=collections_get_links&id=123 \
-  -H "X-Api-Key: your-api-key"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "collection": {
-    "id": 123,
-    "name": "Development Tools",
-    "slug": "development-tools"
-  },
-  "links": [
-    {
-      "id": 456,
-      "url": "https://example.com",
-      "title": "Example Link",
-      "description": "Link description",
-      "created_at": "2024-01-20 10:00:00",
-      "is_private": 0,
-      "tags": [
-        {"id": 1, "name": "Programming", "slug": "programming"}
-      ]
-    }
-  ]
-}
-```
-
-### 12. Get Uncategorized Links 💎
-
-**Action**: `collections_get_uncategorized`  
-**Method**: GET or POST  
-**Available to**: Premium users and Admins only
-
-Retrieve all links that are not assigned to any collection.
-
-**Parameters:**
-- `action=collections_get_uncategorized` (required)
-
-**Example:**
-```bash
-curl https://kioju.de/api/api.php?action=collections_get_uncategorized \
-  -H "X-Api-Key: your-api-key"
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "collection": {
-    "id": null,
-    "name": "Uncategorized",
-    "slug": "uncategorized"
-  },
-  "links": [
-    {
-      "id": 789,
-      "url": "https://uncategorized-link.com",
-      "title": "Uncategorized Link",
-      "description": "This link hasn't been assigned to a collection",
-      "created_at": "2024-01-22 15:30:00",
-      "is_private": 0,
-      "tags": [
-        {"id": 3, "name": "Misc", "slug": "misc"}
-      ]
-    }
-  ]
-}
-```
-
-## Error Responses
-
-### Premium Required
-When a free user tries to access premium features:
-```json
-{
-  "success": false,
-  "message": "Premium feature: Collection management via API is available for Premium users only. Upgrade your account to access this feature.",
-  "premium_required": true
-}
-```
-
-### Rate Limited
-When rate limits are exceeded:
-```json
-{
-  "success": false,
-  "message": "Rate limit exceeded: 25/25 submissions used this hour (Free users). Please try again in 42 minutes (at 15:30)",
-  "rate_limit": {
-    "current": 25,
-    "limit": 25,
-    "reset_in_minutes": 42,
-    "reset_time": "15:30",
-    "user_type": "Free"
-  }
-}
-```
-
-### Authentication Error
-```json
-{
-  "success": false,
-  "message": "Invalid API key"
-}
-```
-
-### Collection Errors
-
-#### Collection Not Found (HTTP 404)
-```json
-{
-  "success": false,
-  "message": "Collection not found or access denied"
-}
-```
-
-#### Validation Error (HTTP 400)
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "errors": {
-    "name": "Collection name is required",
-    "visibility": "Invalid visibility setting"
-  }
-}
-```
-
-#### Duplicate Collection Name (HTTP 409)
-```json
-{
-  "success": false,
-  "message": "A collection with this name already exists"
-}
-```
-
-#### Invalid Link Assignment (HTTP 404)
-```json
-{
-  "success": false,
-  "message": "Link not found or access denied"
-}
-```
-
-## Premium Benefits
-
-Upgrade to Premium to unlock:
-
-- 🔑 **Full API Access**: Use `list`, `update`, and `delete` actions
-- ⚡ **Higher Rate Limits**: 100 submissions/hour vs 25 for free
-- 🛠️ **Advanced Integrations**: Build custom tools and automations
-- 💎 **Priority Support**: Get help when you need it
-
-## Status Codes
-
-- `200` - Success
-- `201` - Created (for successful link additions)
-- `400` - Bad Request (invalid parameters)
-- `401` - Unauthorized (invalid API key)
-- `403` - Forbidden (premium required)
-- `429` - Too Many Requests (rate limited)
-- `500` - Internal Server Error
-
-## Integration Examples
-
-### Chrome Extension
-The Kioju Chrome Extension uses the `add` action to save links with one click. Available for free!
-
-### Custom Scripts
-Premium users can build custom integrations:
-- Backup all links periodically
-- Sync with other bookmark services
-- Create custom link management tools
-- Automate link cleanup and organization
-
----
-
-**Get Started**: Download your API key from https://kioju.de/ and start building!
+Base URL: https://kioju.de/api/api.php
+
+POST Add Link
+Parameters
+Parameter	Type	Required	Description
+action	string	Required	Must be "add"
+url	string	Required	Valid HTTP/HTTPS URL to add
+title	string	Optional	Custom title (auto-fetched if empty)
+is_private	string	Optional	"1" for private (default), "0" for public
+capture_description	string	Optional	"1" to capture description (default), "0" to skip
+tags	string | array	Optional	Comma-separated list or repeated field to attach tags ("reading,research")
+Example Request
+curl -X POST https://kioju.de/api/api.php \ -H "X-Api-Key: your_api_key_here" \ -H "Content-Type: application/x-www-form-urlencoded" \ -d "action=add&url=https://example.com&title=Example Site&is_private=0&capture_description=1&tags=reading,research"
+ Success Response (HTTP 201)
+{ "success": true, "link_id": 123, "tags": [ { "id": 42, "name": "Reading", "slug": "reading" }, { "id": 43, "name": "Research", "slug": "research" } ] }
+ Error Responses
+// HTTP 400 - Invalid URL { "success": false, "message": "Invalid URL format" } // HTTP 409 - Duplicate Link { "success": false, "message": "Duplicate link detected", "existing_link": { "id": 456, "url": "https://example.com", "title": "Example Site", "created_at": "2025-09-12 10:30:00" } } // HTTP 429 - Rate Limited { "success": false, "message": "Rate limit: 50/50 submissions used. Try again in 35 minutes", "rate_limit": { "current": 50, "limit": 50, "reset_in_minutes": 35 } }
+GET List Links
+Parameters
+Parameter	Type	Required	Description
+action	string	Required	Must be "list"
+limit	integer	Optional	Number of links to return (default: 20, max: 100)
+offset	integer	Optional	Number of links to skip (for pagination)
+Example Request
+curl -X GET "https://kioju.de/api/api.php?action=list&limit=10&offset=0" \ -H "X-Api-Key: your_api_key_here"
+ Success Response (HTTP 200)
+{ "success": true, "links": [ { "id": 123, "url": "https://example.com", "title": "Example Site", "description": "This is an example website", "created_at": "2025-09-12 10:30:00", "is_private": false, "is_shadowbanned": false, "tags": [ { "id": 42, "name": "Reading", "slug": "reading" } ] } ] }
+POST Update Link 💎
+Modify the metadata of a link you already saved. The original URL cannot be changed through the API.
+
+Parameters
+Parameter	Type	Required	Description
+action	string	Required	Must be "update"
+id	integer	Required	ID of the link to update
+title	string	Optional	New title (1–255 chars). Empty titles are rejected.
+description	string	Optional	New description. Send an empty string to clear it.
+is_private	string	Optional	"1" for private, "0" for public.
+tags	string | array	Optional	Comma-separated list or JSON array. Include but leave empty to remove all tags.
+Example Request
+curl -X POST https://kioju.de/api/api.php \ -H "X-Api-Key: your_api_key_here" \ -H "Content-Type: application/x-www-form-urlencoded" \ -d "action=update&id=123&title=Updated+Title&description=Fresh+notes&is_private=0&tags=[\"research\",\"articles\"]"
+ Success Response (HTTP 200)
+{ "success": true, "link": { "id": 123, "url": "https://example.com", "title": "Updated Title", "description": "Fresh notes", "created_at": "2025-09-12 10:30:00", "is_private": 0, "is_shadowbanned": 0, "tags": [ { "id": 42, "name": "research", "slug": "research" }, { "id": 43, "name": "articles", "slug": "articles" } ] }, "updated_fields": ["title", "description", "is_private", "tags"] }
+ Validation Errors
+The API returns HTTP 400 if you supply an empty title, invalid privacy flag, or prohibited content.
+
+POST Delete Link
+Parameters
+Parameter	Type	Required	Description
+action	string	Required	Must be "delete"
+id	integer	Required	ID of the link to delete
+Example Request
+curl -X POST https://kioju.de/api/api.php \ -H "X-Api-Key: your_api_key_here" \ -H "Content-Type: application/x-www-form-urlencoded" \ -d "action=delete&id=123"
+ Success Response (HTTP 200)
+{ "success": true }
+GET Check Premium Status
+Determine whether the API key belongs to a Premium account. Helpful for native apps that need to enable or disable premium-only UI features.
+
+Parameters
+Parameter	Type	Required	Description
+action	string	Required	Must be "premium_status"
+Example Request
+curl -X GET "https://kioju.de/api/api.php?action=premium_status" \ -H "X-Api-Key: your_api_key_here"
+ Success Response (HTTP 200)
+{ "success": true, "is_premium": true, "plan": "premium", "feature_access": { "list": true, "delete": true, "update": true } }
+GET Search Tags
+Returns suggested tags to power autocomplete and encourage normalized tagging.
+
+Parameters
+Parameter	Type	Required	Description
+q	string	Required	Search query (prefix or partial tag name)
+limit	integer	Optional	Maximum suggestions to return (default 10, max 30)
+Example Request
+curl -X GET "https://kioju.de/api/tag_suggestions.php?q=read" \ -H "X-Requested-With: XMLHttpRequest"
+ Success Response (HTTP 200)
+{ "success": true, "results": [ { "id": 42, "name": "Reading", "slug": "reading", "usage_count": 58 } ] }
