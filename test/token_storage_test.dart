@@ -20,6 +20,7 @@ class FakePathProviderPlatform extends Fake
 void main() {
   // Initialize FFI for testing
   setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     PathProviderPlatform.instance = FakePathProviderPlatform();
