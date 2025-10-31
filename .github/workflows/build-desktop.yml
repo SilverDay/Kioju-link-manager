@@ -82,7 +82,7 @@ jobs:
     - name: Apply ad-hoc signature for testing
       run: |
         echo "Applying ad-hoc signature for testing purposes"
-        codesign --force --deep --sign - build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        codesign --force --deep --sign - build/macos/Build/Products/Release/kioju_link_manager.app
       
     - name: Archive macOS build
       uses: actions/upload-artifact@v4
