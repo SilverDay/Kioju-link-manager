@@ -94,11 +94,11 @@ jobs:
     - name: Apply ad-hoc signature for testing
       run: |
         echo "Applying ad-hoc signature for testing purposes"
-        codesign --force --deep --sign - build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        codesign --force --deep --sign - build/macos/Build/Products/Release/kioju_link_manager.app
         
     - name: Verify code signature
       run: |
-        codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/kioju_link_manager_flutter.app
+        codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/kioju_link_manager.app
         
     - name: Install create-dmg
       if: ${{ github.event.inputs.create_installer == true }}
@@ -113,16 +113,16 @@ jobs:
           --window-pos 200 120 \
           --window-size 800 450 \
           --icon-size 100 \
-          --icon "kioju_link_manager_flutter.app" 200 190 \
-          --hide-extension "kioju_link_manager_flutter.app" \
+          --icon "kioju_link_manager.app" 200 190 \
+          --hide-extension "kioju_link_manager.app" \
           --app-drop-link 600 185 \
           "../../../../../kioju-link-manager-macos.dmg" \
-          "kioju_link_manager_flutter.app" || echo "DMG creation failed, continuing..."
+          "kioju_link_manager.app" || echo "DMG creation failed, continuing..."
           
     - name: Create macOS ZIP (always)
       run: |
         cd build/macos/Build/Products/Release
-        zip -r ../../../../../kioju-link-manager-macos.zip kioju_link_manager_flutter.app
+        zip -r ../../../../../kioju-link-manager-macos.zip kioju_link_manager.app
         
     - name: Upload macOS artifacts
       uses: actions/upload-artifact@v4
