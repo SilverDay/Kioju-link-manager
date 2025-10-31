@@ -33,11 +33,11 @@ A modern, cross-platform Flutter application for managing Kioju links with seaml
 #### Downloading Pre-built Releases
 1. Go to the [Releases page](https://github.com/SilverDay/Kioju-link-manager/releases)
 2. Download the appropriate package for your platform:
-   - **Windows**: Download the `.msix` installer
-   - **macOS**: Download the `.app` bundle
+   - **Windows**: Download the `.msix` installer or portable `.zip`
+   - **macOS**: Download the `.dmg` installer or `.zip` archive
    - **Linux**: Download the AppImage or build from source
 3. **For Windows users**: See [WINDOWS_INSTALLATION.md](WINDOWS_INSTALLATION.md) for MSIX installation instructions
-4. **For macOS users**: See [MACOS_INSTALLATION.md](MACOS_INSTALLATION.md) for instructions on handling security warnings
+4. **For macOS users**: See [MACOS_INSTALLER.md](MACOS_INSTALLER.md) for DMG installation and code signing information
 
 #### Building from Source
 ```powershell
@@ -97,14 +97,29 @@ flutter pub run msix:create
 
 See [WINDOWS_INSTALLATION.md](WINDOWS_INSTALLATION.md) for complete installation and distribution guide.
 
-### macOS Application
+### macOS DMG Installer
+
+Build a professional macOS installer package:
 
 ```bash
-# Build for macOS release
+# Install dependencies
+flutter pub get
+
+# Build DMG installer (requires macOS)
+flutter_distributor package --platform macos --targets dmg
+
+# Output: dist/<version>/Kioju_Link_Manager-<version>-macos.dmg
+```
+
+**Alternative - Manual build:**
+```bash
+# Build the app bundle
 flutter build macos --release
 
-# The .app bundle will be in build/macos/Build/Products/Release/
+# Output: build/macos/Build/Products/Release/Kioju Link Manager.app
 ```
+
+See [MACOS_INSTALLER.md](MACOS_INSTALLER.md) for complete installation, code signing, and distribution guide.
 
 ### Linux
 
