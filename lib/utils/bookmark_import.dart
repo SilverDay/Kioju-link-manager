@@ -119,9 +119,7 @@ class _CollectionImportHelper {
     bool markCreated = false,
   }) async {
     if (_existingCollectionNames.contains(name)) {
-      if (markCreated) {
-        collectionsCreated.add(name);
-      }
+      // Collection already existed before import, don't mark as created
       return;
     }
 
