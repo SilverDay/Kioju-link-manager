@@ -492,6 +492,9 @@ class KiojuApi {
           if (validation.isValid && validation.sanitizedValue != null) {
             sanitized[key] = validation.sanitizedValue;
           }
+        } else if (key == 'message' || key == 'plan' || key == 'error') {
+          // Preserve API response messages and status fields
+          sanitized[key] = value;
         } else {
           // For other string fields, apply basic sanitization
           final cleaned = value.replaceAll(RegExp(r'[<>"\x27]'), '').trim();
@@ -521,6 +524,12 @@ class KiojuApi {
       } else if (value is Map<String, dynamic>) {
         // Recursively sanitize nested objects
         sanitized[key] = _sanitizeApiResponseItem(value);
+      } else if (value == null) {
+        // Preserve null values for API responses
+        sanitized[key] = null;
+      } else {
+        // For any other type, preserve as-is (this includes API response fields)
+        sanitized[key] = value;
       }
     }
 
@@ -777,11 +786,170 @@ class KiojuApi {
 
     try {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
+      
+      final sanitized = _sanitizeApiResponseItem(data);
+      
+      return sanitized;
     } catch (e) {
       throw Exception('Failed to parse API response: $e');
     }
   }
+
+  /// Test with browser-like request format
+  static Future<Map<String, dynamic>> testBrowserLikeRequest() async {
+    final token = await _readToken();
+    
+    if (token == null || token.isEmpty) {
+      return {'error': 'No API token found'};
+    }
+
+    // Try to mimic exactly what a browser extension would send
+    final uri = Uri.parse('https://kioju.de/api/api.php?action=premium_status');
+    
+    final headers = <String, String>{
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'X-Api-Key': token,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
+
+    try {
+      final client = _createSecureClient();
+      final response = await client.get(uri, headers: headers).timeout(_requestTimeout);
+      client.close();
+
+      return {
+        'status_code': response.statusCode,
+        'body': response.body,
+        'headers_sent': headers,
+        'success': response.statusCode == 200,
+      };
+    } catch (e) {
+      return {'error': e.toString()};
+    }
+  }
+
+  /// Test with a completely different token format/approach
+  static Future<Map<String, dynamic>> testAlternativeTokenFormat() async {
+    final token = await _readToken();
+    
+    if (token == null || token.isEmpty) {
+      return {'error': 'No API token found'};
+    }
+
+    // Try different header formats that might work
+    final testCases = [
+      {'Authorization': 'Bearer $token'},
+      {'Authorization': 'Token $token'},
+      {'X-API-Token': token},
+      {'X-Auth-Token': token},
+      {'Api-Key': token},
+      {'X-Api-Key': token}, // Current format
+    ];
+
+    final results = <String, dynamic>{};
+    
+    for (int i = 0; i < testCases.length; i++) {
+      final headers = <String, String>{
+        'User-Agent': 'KiojuLinkManager/1.0',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...testCases[i],
+      };
+
+      try {
+        final uri = Uri.parse(_baseUrl).replace(queryParameters: {'action': 'premium_status'});
+        final client = _createSecureClient();
+        final response = await client.get(uri, headers: headers).timeout(_requestTimeout);
+        client.close();
+
+        results['test_${i + 1}_${testCases[i].keys.first}'] = {
+          'status_code': response.statusCode,
+          'body': response.body,
+          'headers': testCases[i],
+        };
+      } catch (e) {
+        results['test_${i + 1}_${testCases[i].keys.first}'] = {
+          'error': e.toString(),
+          'headers': testCases[i],
+        };
+      }
+    }
+
+    return results;
+  }
+
+  /// Test basic API connectivity with current token
+  static Future<Map<String, dynamic>> testApiConnection() async {
+    final token = await _readToken();
+    
+    if (token == null || token.isEmpty) {
+      return {'error': 'No API token found'};
+    }
+
+    // Try the simplest API call first - add action (which should work for any valid token)
+    final uri = Uri.parse(_baseUrl);
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      'X-Api-Key': token,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+
+    try {
+      // Test with a minimal request that should return an error but validate the token
+      final client = _createSecureClient();
+      final response = await client.post(
+        uri, 
+        headers: headers, 
+        body: {'action': 'test'} // Invalid action, but should validate token first
+      ).timeout(_requestTimeout);
+      
+      client.close();
+
+      return {
+        'status_code': response.statusCode,
+        'body': response.body,
+        'token_accepted': response.statusCode != 401, // 401 means invalid token
+        'headers': response.headers.toString(),
+      };
+    } catch (e) {
+      return {'error': e.toString()};
+    }
+  }
+
+  /// Analyze token format without hashing
+  static Future<Map<String, dynamic>> debugTokenInfo() async {
+    final token = await _readToken();
+    
+    if (token == null || token.isEmpty) {
+      return {'error': 'No token found'};
+    }
+    
+    return {
+      'token_length': token.length,
+      'token_preview': '${token.substring(0, 8)}...',
+      'token_full': token,
+      'is_valid_hex': RegExp(r'^[0-9a-fA-F]+$').hasMatch(token),
+      'character_analysis': _analyzeTokenCharacters(token),
+    };
+  }
+
+  static Map<String, dynamic> _analyzeTokenCharacters(String token) {
+    final chars = token.split('');
+    final analysis = <String, dynamic>{};
+    
+    analysis['total_length'] = chars.length;
+    analysis['unique_chars'] = chars.toSet().length;
+    analysis['has_uppercase'] = chars.any((c) => c.toUpperCase() == c && c.toLowerCase() != c);
+    analysis['has_lowercase'] = chars.any((c) => c.toLowerCase() == c && c.toUpperCase() != c);
+    analysis['has_numbers'] = chars.any((c) => '0123456789'.contains(c));
+    analysis['invalid_chars'] = chars.where((c) => !'0123456789abcdefABCDEF'.contains(c)).toList();
+    
+    return analysis;
+  }
+
+  // Debug methods removed for production
 
   static Future<List<Map<String, dynamic>>> searchTags({
     required String query,
@@ -815,6 +983,286 @@ class KiojuApi {
       return [];
     } catch (e) {
       throw Exception('Failed to parse tag search response: $e');
+    }
+  }
+
+  // ============================================================================
+  // COLLECTION MANAGEMENT API ENDPOINTS
+  // ============================================================================
+
+  /// List all collections for the authenticated user
+  static Future<Map<String, dynamic>> listCollections() async {
+    final token = await _readToken();
+
+    final uri = Uri.parse(_baseUrl).replace(
+      queryParameters: {'action': 'collections_list'},
+    );
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse collections list response: $e');
+    }
+  }
+
+  /// Create a new collection
+  static Future<Map<String, dynamic>> createCollection({
+    required String name,
+    String? description,
+    String visibility = 'public',
+    List<String>? tags,
+  }) async {
+    // Validate input
+    if (name.trim().isEmpty) {
+      throw ArgumentError('Collection name cannot be empty');
+    }
+    if (name.length > 100) {
+      throw ArgumentError('Collection name cannot exceed 100 characters');
+    }
+    if (description != null && description.length > 2000) {
+      throw ArgumentError('Collection description cannot exceed 2000 characters');
+    }
+    if (!['public', 'private', 'hidden'].contains(visibility)) {
+      throw ArgumentError('Invalid visibility setting');
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_create',
+      'name': name.trim(),
+      'visibility': visibility,
+    };
+
+    if (description != null && description.trim().isNotEmpty) {
+      form['description'] = description.trim();
+    }
+
+    if (tags != null && tags.isNotEmpty) {
+      form['tags'] = jsonEncode(tags);
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse create collection response: $e');
+    }
+  }
+
+  /// Update an existing collection
+  static Future<Map<String, dynamic>> updateCollection({
+    required String id,
+    String? name,
+    String? description,
+    String? visibility,
+    List<String>? tags,
+  }) async {
+    // Validate ID
+    if (id.trim().isEmpty) {
+      throw ArgumentError('Collection ID cannot be empty');
+    }
+
+    // Validate optional parameters
+    if (name != null) {
+      if (name.trim().isEmpty) {
+        throw ArgumentError('Collection name cannot be empty');
+      }
+      if (name.length > 100) {
+        throw ArgumentError('Collection name cannot exceed 100 characters');
+      }
+    }
+
+    if (description != null && description.length > 2000) {
+      throw ArgumentError('Collection description cannot exceed 2000 characters');
+    }
+
+    if (visibility != null && !['public', 'private', 'hidden'].contains(visibility)) {
+      throw ArgumentError('Invalid visibility setting');
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_update',
+      'id': id.trim(),
+    };
+
+    if (name != null) {
+      form['name'] = name.trim();
+    }
+
+    if (description != null) {
+      form['description'] = description.trim();
+    }
+
+    if (visibility != null) {
+      form['visibility'] = visibility;
+    }
+
+    if (tags != null) {
+      form['tags'] = jsonEncode(tags);
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse update collection response: $e');
+    }
+  }
+
+  /// Delete a collection
+  static Future<Map<String, dynamic>> deleteCollection({
+    required String id,
+    String deleteMode = 'move_links',
+  }) async {
+    // Validate ID
+    if (id.trim().isEmpty) {
+      throw ArgumentError('Collection ID cannot be empty');
+    }
+
+    // Validate delete mode
+    if (!['move_links', 'delete_links'].contains(deleteMode)) {
+      throw ArgumentError('Invalid delete mode: must be "move_links" or "delete_links"');
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_delete',
+      'id': id.trim(),
+      'delete_mode': deleteMode,
+    };
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse delete collection response: $e');
+    }
+  }
+
+  /// Assign a link to a collection
+  static Future<Map<String, dynamic>> assignLinkToCollection({
+    required String linkId,
+    String? collectionId,
+  }) async {
+    // Validate link ID
+    if (linkId.trim().isEmpty) {
+      throw ArgumentError('Link ID cannot be empty');
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_assign_link',
+      'link_id': linkId.trim(),
+    };
+
+    if (collectionId != null && collectionId.trim().isNotEmpty) {
+      form['collection_id'] = collectionId.trim();
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse assign link response: $e');
+    }
+  }
+
+  /// Get links within a specific collection
+  static Future<Map<String, dynamic>> getCollectionLinks(String collectionId) async {
+    // Validate collection ID
+    if (collectionId.trim().isEmpty) {
+      throw ArgumentError('Collection ID cannot be empty');
+    }
+
+    final token = await _readToken();
+
+    final uri = Uri.parse(_baseUrl).replace(
+      queryParameters: {
+        'action': 'collections_get_links',
+        'id': collectionId.trim(),
+      },
+    );
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse collection links response: $e');
+    }
+  }
+
+  /// Get uncategorized links (not assigned to any collection)
+  static Future<Map<String, dynamic>> getUncategorizedLinks() async {
+    final token = await _readToken();
+
+    final uri = Uri.parse(_baseUrl).replace(
+      queryParameters: {'action': 'collections_get_uncategorized'},
+    );
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return _sanitizeApiResponseItem(data);
+    } catch (e) {
+      throw Exception('Failed to parse uncategorized links response: $e');
     }
   }
 }

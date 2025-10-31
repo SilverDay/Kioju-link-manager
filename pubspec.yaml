@@ -1,6 +1,6 @@
 name: kioju_link_manager
 description: Cross-platform Flutter app to manage Kioju links and bookmarks
-publish_to: 'none'
+publish_to: "none"
 version: 0.1.2+1
 
 environment:
@@ -19,6 +19,7 @@ dependencies:
   html: ^0.15.6
   url_launcher: ^6.3.2
   file_selector: ^1.0.3
+  shared_preferences: ^2.3.3
 
 dev_dependencies:
   flutter_test:
@@ -35,8 +36,8 @@ flutter:
 
 # Configuration for flutter_launcher_icons
 flutter_launcher_icons:
-  android: false  # Set to true if you add Android support later
-  ios: false      # Set to true if you add iOS support later
+  android: false # Set to true if you add Android support later
+  ios: false # Set to true if you add iOS support later
   windows:
     generate: true
     image_path: "assets/kioju-icon.png"

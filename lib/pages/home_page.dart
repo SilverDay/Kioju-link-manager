@@ -4,10 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../db.dart';
+import '../models/collection.dart';
 import '../models/link.dart';
+import '../services/collection_service.dart';
 import '../services/kioju_api.dart';
+import '../services/sync_settings.dart';
+import '../services/link_service.dart';
+
 import '../utils/bookmark_import.dart';
+import '../services/import_service.dart';
 import '../widgets/add_link_dialog.dart';
+import '../widgets/bulk_operations_dialog.dart';
+import '../widgets/collection_tree_widget.dart';
+import '../widgets/create_collection_dialog.dart';
+import '../widgets/delete_collection_dialog.dart';
+import '../widgets/edit_collection_dialog.dart';
+import '../widgets/enhanced_search_bar.dart';
+import '../widgets/import_conflict_dialog.dart';
+import '../widgets/import_summary_dialog.dart';
+import '../widgets/sync_conflict_dialog.dart';
 import 'link_selection_page.dart';
 import 'settings_page.dart';
 
@@ -21,11 +36,20 @@ class _HomePageState extends State<HomePage> {
   final _searchCtrl = TextEditingController();
 
   List<LinkItem> items = [];
+  List<Collection> collections = [];
+  List<LinkItem> uncategorizedLinks = [];
+  Collection? _selectedCollection; // For search filtering
+
+  // Services
+  final CollectionService _collectionService = CollectionService.instance;
+  final LinkService _linkService = LinkService.instance;
 
   // Progress tracking state
   bool _isImporting = false;
   bool _isExporting = false;
   bool _isSyncing = false;
+  bool _isLoadingCollections = false;
+  bool _forceOverwriteOnSync = false;
 
   // Premium status tracking
   bool? _isPremium; // null = not checked, true = premium, false = not premium
@@ -66,9 +90,17 @@ class _HomePageState extends State<HomePage> {
     try {
       final response = await KiojuApi.checkPremiumStatus();
       if (mounted && response['success'] == true) {
+        final wasPremium = _isPremium;
+        final isPremium = response['is_premium'] == true;
+        
         setState(() {
-          _isPremium = response['is_premium'] == true;
+          _isPremium = isPremium;
         });
+
+        // If premium status changed, refresh the view
+        if (wasPremium != isPremium) {
+          await _refresh();
+        }
       }
     } catch (e) {
       // If premium check fails, assume not premium for safety
@@ -129,9 +161,15 @@ class _HomePageState extends State<HomePage> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SettingsPage()),
-                  );
+                  Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
+                      .then((_) async {
+                        if (mounted) {
+                          setState(() {});
+                          _checkFirstTimeSetup();
+                          await _refresh();
+                        }
+                      });
                 },
                 child: const Text('Settings'),
               ),
@@ -181,11 +219,12 @@ class _HomePageState extends State<HomePage> {
                       .push(
                         MaterialPageRoute(builder: (_) => const SettingsPage()),
                       )
-                      .then((_) {
+                      .then((_) async {
                         // Recheck setup after settings page
                         if (mounted) {
                           setState(() {});
                           _checkFirstTimeSetup();
+                          await _refresh();
                         }
                       });
                 },
@@ -200,22 +239,178 @@ class _HomePageState extends State<HomePage> {
   Future<void> _refresh() async {
     final q = _searchCtrl.text.trim();
     final database = await db;
+    
+    // Build where clause for search and collection filtering
+    List<String> whereConditions = [];
+    List<dynamic> whereArgs = [];
+    
+    // Add search conditions
+    if (q.isNotEmpty) {
+      whereConditions.add('(url LIKE ? OR title LIKE ? OR notes LIKE ?)');
+      whereArgs.addAll(['%$q%', '%$q%', '%$q%']);
+    }
+    
+    // Add collection filtering
+    if (_selectedCollection != null) {
+      if (_selectedCollection!.name == '_uncategorized') {
+        // Filter for uncategorized links
+        whereConditions.add('(collection IS NULL OR collection = "")');
+      } else {
+        // Filter for specific collection
+        whereConditions.add('collection = ?');
+        whereArgs.add(_selectedCollection!.name);
+      }
+    }
+    
+    // Load filtered links
     final rows = await database.query(
       'links',
-      where: q.isEmpty ? null : '(url LIKE ? OR title LIKE ? OR notes LIKE ?)',
-      whereArgs: q.isEmpty ? null : ['%$q%', '%$q%', '%$q%'],
+      where: whereConditions.isEmpty ? null : whereConditions.join(' AND '),
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
       orderBy: 'updated_at DESC',
       limit: 500,
     );
+    final allLinks = rows.map((r) => LinkItem.fromMap(r)).toList();
+    
+    // Load collections if premium user
+    if (_isPremium == true) {
+      await _loadCollections();
+      
+      // Separate uncategorized links (only if not filtering by collection)
+      final uncategorized = _selectedCollection == null 
+          ? allLinks.where((link) => 
+              link.collection == null || link.collection!.isEmpty).toList()
+          : <LinkItem>[];
+      
+      setState(() {
+        items = allLinks;
+        uncategorizedLinks = uncategorized;
+      });
+    } else {
+      // For non-premium users, show flat list
+      setState(() {
+        items = allLinks;
+        collections = [];
+        uncategorizedLinks = allLinks;
+      });
+    }
+  }
+
+  Future<void> _loadCollections() async {
+    if (_isLoadingCollections) return;
+    
     setState(() {
-      items = rows.map((r) => LinkItem.fromMap(r)).toList();
+      _isLoadingCollections = true;
     });
+
+    try {
+      final loadedCollections = await _collectionService.getCollections();
+      setState(() {
+        collections = loadedCollections;
+        _isLoadingCollections = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingCollections = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load collections: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    _refresh();
+  }
+
+  void _onCollectionFilterChanged(Collection? collection) {
+    setState(() {
+      _selectedCollection = collection;
+    });
+    _refresh();
+  }
+
+  String _buildSearchResultsText() {
+    final searchQuery = _searchCtrl.text.trim();
+    final hasSearch = searchQuery.isNotEmpty;
+    final hasCollectionFilter = _selectedCollection != null;
+    
+    if (hasSearch && hasCollectionFilter) {
+      if (_selectedCollection!.name == '_uncategorized') {
+        return 'Showing uncategorized links matching "$searchQuery" (${items.length} results)';
+      } else {
+        return 'Showing links in "${_selectedCollection!.name}" matching "$searchQuery" (${items.length} results)';
+      }
+    } else if (hasSearch) {
+      return 'Showing links matching "$searchQuery" (${items.length} results)';
+    } else if (hasCollectionFilter) {
+      if (_selectedCollection!.name == '_uncategorized') {
+        return 'Showing uncategorized links (${items.length} links)';
+      } else {
+        return 'Showing links in "${_selectedCollection!.name}" (${items.length} links)';
+      }
+    }
+    
+    return '';
+  }
+
+  Future<void> _showBulkOperationsDialog(List<LinkItem> selectedLinks) async {
+    if (selectedLinks.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => BulkOperationsDialog(
+        selectedLinks: selectedLinks,
+        collections: collections,
+        onOperationComplete: () {
+          _refresh(); // Refresh the view after bulk operation
+        },
+      ),
+    );
   }
 
   Future<void> _delete(int id) async {
-    final database = await db;
-    await database.delete('links', where: 'id=?', whereArgs: [id]);
-    await _refresh();
+    try {
+      final syncResult = await _linkService.deleteLink(linkId: id);
+
+      await _refresh();
+
+      if (mounted) {
+        final message = LinkService.formatSyncResultMessage(syncResult, 'Link deleted');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  syncResult.success ? Icons.check : Icons.error,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: syncResult.success
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.error,
+            duration: Duration(seconds: syncResult.success ? 3 : 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete link: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _import() async {
@@ -238,17 +433,20 @@ class _HomePageState extends State<HomePage> {
       final path = xfile.path;
       final text = await xfile.readAsString();
 
-      _updateProgressDialog('Parsing bookmarks...');
+      _updateProgressDialog('Parsing bookmarks and creating collections...');
 
-      List<ImportedBookmark> imported = [];
+      // First pass: Parse bookmarks and handle collection conflicts
+      ImportResult initialResult;
       if (path.endsWith('.html') ||
           text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
-        imported = importFromNetscapeHtml(text);
+        initialResult = await importFromNetscapeHtml(text, createCollections: true);
       } else if (path.endsWith('.json')) {
-        imported = importFromChromeJson(jsonDecode(text));
+        initialResult = await importFromChromeJson(jsonDecode(text), createCollections: true);
+      } else {
+        throw Exception('Unsupported file format');
       }
 
-      if (imported.isEmpty) {
+      if (initialResult.bookmarks.isEmpty) {
         _hideProgressDialog();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -260,39 +458,68 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      _updateProgressDialog('Processing ${imported.length} links...');
+      // Handle collection conflicts if any
+      Map<String, String>? collectionMappings;
+      if (initialResult.collectionConflicts.isNotEmpty) {
+        _hideProgressDialog();
+        
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (context) => ImportConflictDialog(
+              conflictingCollections: initialResult.collectionConflicts,
+              onResolved: (resolutions) {
+                collectionMappings = resolutions;
+              },
+            ),
+          );
+        }
 
-      // Convert to selection items and show selection interface
-      final browserLinks =
-          imported
-              .map((bookmark) => LinkSelectionItem.fromImported(bookmark))
-              .toList();
+        // If user cancelled conflict resolution, abort import
+        if (collectionMappings == null) {
+          return;
+        }
+      }
 
-      _updateProgressDialog('Loading existing links...');
+      // Second pass: Import with sync strategy
+      _updateProgressDialog('Importing ${initialResult.bookmarks.length} links...');
 
-      // Get current Kioju links for comparison
-      final database = await db;
-      final existingRows = await database.query('links');
-      final kiojuLinks =
-          existingRows
-              .map((r) => LinkSelectionItem.fromKioju(LinkItem.fromMap(r)))
-              .toList();
+      ImportSyncResult importSyncResult;
+      if (path.endsWith('.html') ||
+          text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
+        importSyncResult = await ImportService.instance.importFromHtml(
+          text,
+          createCollections: true,
+          collectionNameMappings: collectionMappings,
+          onProgress: (completed, total) {
+            _updateProgressDialog('Importing links... ($completed/$total)');
+          },
+        );
+      } else {
+        importSyncResult = await ImportService.instance.importFromJson(
+          jsonDecode(text),
+          createCollections: true,
+          collectionNameMappings: collectionMappings,
+          onProgress: (completed, total) {
+            _updateProgressDialog('Importing links... ($completed/$total)');
+          },
+        );
+      }
 
       _hideProgressDialog();
 
-      // Show selection dialog
+      // Show import summary with sync results
       if (mounted) {
-        await Navigator.of(context).push<Map<String, dynamic>>(
-          MaterialPageRoute(
-            builder:
-                (_) => LinkSelectionPage(
-                  initialBrowserLinks: browserLinks,
-                  initialKiojuLinks: kiojuLinks,
-                ),
+        await showDialog<void>(
+          context: context,
+          builder: (context) => ImportSummaryDialog(
+            importResult: importSyncResult.importResult,
+            linksImported: importSyncResult.totalLinksProcessed,
+            syncResult: importSyncResult,
           ),
         );
 
-        // Always refresh when returning from link selection
+        // Always refresh after import
         await _refresh();
       }
     } catch (e) {
@@ -372,6 +599,278 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Collection management methods
+  Future<void> _createCollection() async {
+    if (_requiresPremiumWarning) {
+      _showPremiumRequiredDialog('Collection Management');
+      return;
+    }
+
+    final result = await showCreateCollectionDialog(context);
+    if (result != null) {
+      try {
+        await _collectionService.createCollection(
+          name: result['name'],
+          description: result['description'],
+          visibility: result['visibility'],
+        );
+        
+        if (mounted) {
+          // Show success message based on sync preference
+          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+          final message = isImmediateSync 
+              ? 'Collection created and synced successfully'
+              : 'Collection created locally. Use sync to upload changes.';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+          await _refresh();
+        }
+      } catch (e) {
+        if (mounted) {
+          // Check if this is a sync failure
+          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+          String message;
+          
+          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
+            message = 'Collection created locally, but server sync failed: ${e.toString()}';
+          } else {
+            message = 'Failed to create collection: ${e.toString()}';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          
+          // Still refresh to show the locally created collection
+          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
+            await _refresh();
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _editCollection(Collection collection) async {
+    final result = await showEditCollectionDialog(context, collection);
+    if (result != null) {
+      try {
+        await _collectionService.updateCollection(
+          id: result['id'],
+          name: result['name'],
+          description: result['description'],
+          visibility: result['visibility'],
+        );
+        
+        if (mounted) {
+          // Show success message based on sync preference
+          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+          final message = isImmediateSync 
+              ? 'Collection updated and synced successfully'
+              : 'Collection updated locally. Use sync to upload changes.';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+          
+          // Refresh data first to get updated collection info
+          await _refresh();
+          
+          // Then refresh the specific collection if it was renamed
+          if (result['name'] != collection.name) {
+            // Wait for the widget to rebuild with new collections data
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              // Find the updated collection in the new data
+              final updatedCollection = collections.firstWhere(
+                (c) => c.id == collection.id,
+                orElse: () => collection,
+              );
+              collectionTreeKey.currentState?.refreshCollection(updatedCollection);
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          // Check if this is a sync failure
+          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+          String message;
+          
+          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
+            message = 'Collection updated locally, but server sync failed: ${e.toString()}';
+          } else {
+            message = 'Failed to update collection: ${e.toString()}';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          
+          // Still refresh to show the locally updated collection
+          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
+            await _refresh();
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteCollection(Collection collection) async {
+    final result = await showDeleteCollectionDialog(context, collection);
+    if (result != null) {
+      try {
+        await _collectionService.deleteCollection(
+          collection.id!,
+          deleteMode: result['linkHandling'],
+        );
+        
+        if (mounted) {
+          // Show success message based on sync preference
+          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+          final message = isImmediateSync 
+              ? 'Collection deleted and synced successfully'
+              : 'Collection deleted locally. Use sync to upload changes.';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+          await _refresh();
+        }
+      } catch (e) {
+        if (mounted) {
+          // Check if this is a sync failure
+          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+          String message;
+          
+          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
+            message = 'Collection deleted locally, but server sync failed: ${e.toString()}';
+          } else {
+            message = 'Failed to delete collection: ${e.toString()}';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          
+          // Still refresh to show the updated state
+          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
+            await _refresh();
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _moveLink(LinkItem link, String? collectionId) async {
+    try {
+      final syncResult = await _linkService.moveLink(
+        linkId: link.id!,
+        toCollection: collectionId,
+      );
+      
+      if (mounted) {
+        final operationName = collectionId == null 
+            ? 'Link moved to uncategorized'
+            : 'Link moved to collection';
+        final message = LinkService.formatSyncResultMessage(syncResult, operationName);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  syncResult.success ? Icons.check : Icons.error,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            backgroundColor: syncResult.success
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.error,
+            duration: Duration(seconds: syncResult.success ? 3 : 5),
+          ),
+        );
+        await _refresh();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to move link: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+
+
+
+
+
+
+
+
   Future<void> _pull() async {
     if (_isSyncing) return; // Prevent multiple simultaneous syncs
 
@@ -379,6 +878,45 @@ class _HomePageState extends State<HomePage> {
     if (_requiresPremiumWarning) {
       _showPremiumRequiredDialog('Sync Down (List)');
       return;
+    }
+
+    // Check for unsynced changes if premium user
+    if (_isPremium == true) {
+      try {
+        final hasUnsynced = await _collectionService.hasUnsyncedChanges();
+        if (hasUnsynced) {
+          final unsyncedCounts = await _collectionService.getUnsyncedChangesCount();
+          if (!mounted) return;
+          final action = await showSyncConflictDialog(
+            context,
+            unsyncedCollections: unsyncedCounts['collections'] ?? 0,
+            unsyncedLinks: unsyncedCounts['links'] ?? 0,
+          );
+
+          if (action == 'cancel') {
+            return;
+          } else if (action == 'sync_up_first') {
+            await _push();
+            return;
+          }
+          // If action == 'continue', proceed with sync down with forceOverwrite
+          if (action == 'continue') {
+            // Set flag to force overwrite local changes
+
+            _forceOverwriteOnSync = true;
+          }
+        }
+      } catch (e) {
+        // If we can't check for unsynced changes, proceed with caution
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Warning: Could not check for local changes: ${e.toString()}'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
     }
 
     setState(() {
@@ -403,27 +941,130 @@ class _HomePageState extends State<HomePage> {
 
       _showProgressDialog('Syncing Down', 'Downloading links from Kioju...');
 
-      // Fetch all links with pagination
+      // For premium users, fetch links via collections to get proper categorization
       List<Map<String, dynamic>> allRemoteLinks = [];
-      int offset = 0;
-      const int batchSize = 100; // API max limit
+      
+      if (_isPremium == true) {
+        // First sync collections to ensure we have the latest collection list
+        _updateProgressDialog('Syncing collections...');
+        try {
+          await _collectionService.syncDown(forceOverwrite: _forceOverwriteOnSync);
 
-      while (true) {
-        _updateProgressDialog(
-          'Downloading batch ${(offset / batchSize + 1).toInt()}...',
-        );
+        } catch (e) {
 
-        final batch = await KiojuApi.listLinks(
-          limit: batchSize,
-          offset: offset,
-        );
-        if (batch.isEmpty) break; // No more links
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Collection sync failed: ${e.toString()}'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
 
-        allRemoteLinks.addAll(batch);
-        offset += batchSize;
+        // Get all collections from collection service AFTER sync is complete
+        // This ensures we get the most up-to-date collection list
+        final collectionObjects = await _collectionService.getCollections();
+        final collections = collectionObjects
+            .where((c) => c.remoteId != null)
+            .map((c) => {
+              'name': c.name,
+              'remote_id': c.remoteId,
+              'id': c.id,
+            })
+            .toList();
+        
 
-        // If we got less than the batch size, we've reached the end
-        if (batch.length < batchSize) break;
+        
+        // Fetch links for each collection
+        for (int i = 0; i < collections.length; i++) {
+          final collection = collections[i];
+          final collectionName = collection['name'] as String;
+          final remoteId = collection['remote_id'] as String;
+          
+          _updateProgressDialog('Downloading links from "$collectionName" (${i + 1}/${collections.length})...');
+          
+          try {
+            final response = await KiojuApi.getCollectionLinks(remoteId);
+
+            
+            if (response['success'] == true && response['links'] != null) {
+              final linksList = response['links'] as List<dynamic>;
+              final collectionLinks = linksList.cast<Map<String, dynamic>>();
+              
+              // Add collection name to each link
+              for (final link in collectionLinks) {
+                link['_collection_name'] = collectionName;
+              }
+              
+              allRemoteLinks.addAll(collectionLinks);
+            }
+          } catch (e) {
+            // Check if this is a 404 error (collection doesn't exist on API)
+            if (e.toString().contains('404') || e.toString().contains('not found')) {
+              // Don't show error to user for 404s, just continue with other collections
+            } else {
+              // Show error for other types of failures
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to sync collection "$collectionName": ${e.toString()}'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            }
+          }
+        }
+
+        // Also fetch uncategorized links
+        _updateProgressDialog('Downloading uncategorized links...');
+        try {
+          final response = await KiojuApi.getUncategorizedLinks();
+
+          
+          if (response['success'] == true && response['links'] != null) {
+            final linksList = response['links'] as List<dynamic>;
+            final uncategorizedLinks = linksList.cast<Map<String, dynamic>>();
+            
+            // Mark these as uncategorized (no collection)
+            for (final link in uncategorizedLinks) {
+              link['_collection_name'] = null;
+            }
+            
+            allRemoteLinks.addAll(uncategorizedLinks);
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to sync uncategorized links: ${e.toString()}'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      } else {
+        // For non-premium users, use the regular list API
+        int offset = 0;
+        const int batchSize = 100;
+
+        while (true) {
+          _updateProgressDialog(
+            'Downloading batch ${(offset / batchSize + 1).toInt()}...',
+          );
+
+          final batch = await KiojuApi.listLinks(
+            limit: batchSize,
+            offset: offset,
+          );
+          if (batch.isEmpty) break;
+
+          allRemoteLinks.addAll(batch);
+          offset += batchSize;
+
+          if (batch.length < batchSize) break;
+        }
       }
 
       final remote = allRemoteLinks;
@@ -440,38 +1081,38 @@ class _HomePageState extends State<HomePage> {
         final title = (m['title'] ?? '') as String?;
         final description = (m['description'] ?? '') as String?;
         final isPrivate = m['is_private'];
+        final collectionName = m['_collection_name'] as String?; // Collection info from our API calls
 
         // Improved tag parsing - extract slugs from tag objects
         final tags = _parseTagsFromApi(m['tags']);
 
         final id = (m['id'] ?? m['remote_id'] ?? '').toString();
-        batch.insert('links', {
-          'url': url,
-          'title': (title?.isNotEmpty ?? false) ? title : null,
-          'notes': (description?.isNotEmpty ?? false) ? description : null,
-          'tags': tags,
-          'is_private':
-              (isPrivate is bool
-                      ? isPrivate
-                      : (isPrivate == 1 || isPrivate == '1'))
-                  ? 1
-                  : 0,
-          'remote_id': id.isNotEmpty ? id : null,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-        batch.rawUpdate(
-          'UPDATE links SET title=COALESCE(?, title), notes=COALESCE(?, notes), tags=COALESCE(?, tags), is_private=COALESCE(?, is_private), updated_at=CURRENT_TIMESTAMP WHERE remote_id=?',
-          [
-            title,
-            description,
-            tags,
-            (isPrivate is bool
-                    ? isPrivate
-                    : (isPrivate == 1 || isPrivate == '1'))
-                ? 1
-                : 0,
-            id,
-          ],
-        );
+        
+
+        
+        // Use INSERT OR REPLACE to handle URL conflicts properly
+        batch.rawInsert('''
+          INSERT OR REPLACE INTO links (
+            url, title, notes, tags, collection, is_private, remote_id, 
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 
+            COALESCE((SELECT created_at FROM links WHERE url = ?), CURRENT_TIMESTAMP),
+            CURRENT_TIMESTAMP
+          )
+        ''', [
+          url,
+          (title?.isNotEmpty ?? false) ? title : null,
+          (description?.isNotEmpty ?? false) ? description : null,
+          tags,
+          collectionName,
+          (isPrivate is bool
+                  ? isPrivate
+                  : (isPrivate == 1 || isPrivate == '1'))
+              ? 1
+              : 0,
+          id.isNotEmpty ? id : null,
+          url, // For the COALESCE created_at lookup
+        ]);
 
         processed++;
         if (processed % 10 == 0) {
@@ -483,6 +1124,22 @@ class _HomePageState extends State<HomePage> {
 
       _updateProgressDialog('Saving to database...');
       await batch.commit(noResult: true);
+      
+      // Debug: Check what's actually in the database after sync
+      final dbInstance = await db;
+      final allLinks = await dbInstance.query('links');
+      final collectionsInDb = <String, int>{};
+      
+      for (final link in allLinks) {
+        final collection = link['collection'] as String?;
+        final key = collection ?? 'UNCATEGORIZED';
+        collectionsInDb[key] = (collectionsInDb[key] ?? 0) + 1;
+      }
+      
+
+
+      // Update collection link counts after sync
+      await _collectionService.updateCollectionLinkCounts();
 
       _hideProgressDialog();
 
@@ -515,9 +1172,15 @@ class _HomePageState extends State<HomePage> {
             action: SnackBarAction(
               label: 'Settings',
               onPressed: () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+                Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
+                    .then((_) async {
+                      if (mounted) {
+                        setState(() {});
+                        _checkFirstTimeSetup();
+                        await _refresh();
+                      }
+                    });
               },
             ),
           ),
@@ -534,9 +1197,15 @@ class _HomePageState extends State<HomePage> {
             action: SnackBarAction(
               label: 'Settings',
               onPressed: () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+                Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
+                    .then((_) async {
+                      if (mounted) {
+                        setState(() {});
+                        _checkFirstTimeSetup();
+                        await _refresh();
+                      }
+                    });
               },
             ),
           ),
@@ -553,6 +1222,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           _isSyncing = false;
+          _forceOverwriteOnSync = false; // Reset the flag
         });
       }
     }
@@ -608,158 +1278,65 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // Check rate limit status before making requests
-      final rateLimitStatus = KiojuApi.getRateLimitStatus();
-      if (!rateLimitStatus['canMakeRequest']) {
+      // Check if there are any changes to sync
+      final pendingChanges = await _collectionService.getPendingChangesCount();
+      if (pendingChanges['total'] == 0) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(rateLimitStatus['message']),
-              duration: const Duration(seconds: 5),
-              backgroundColor: Colors.orange,
-            ),
+            const SnackBar(content: Text('No changes to sync')),
           );
         }
+        setState(() {
+          _isSyncing = false;
+        });
         return;
       }
 
-      final database = await db;
-      final rows = await database.query('links', where: 'remote_id IS NULL');
+      _showProgressDialog('Syncing Up', 'Syncing changes to Kioju...');
 
-      if (rows.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No new links to upload')),
-          );
-        }
-        return;
-      }
-
-      _showProgressDialog(
-        'Syncing Up',
-        'Uploading ${rows.length} links to Kioju...',
-      );
-
-      int ok = 0;
-      int failed = 0;
-      String? lastError;
-
-      for (int i = 0; i < rows.length; i++) {
-        final r = rows[i];
-        _updateProgressDialog('Uploading ${i + 1}/${rows.length} links...');
-
-        try {
-          final isPrivate = (r['is_private'] as int? ?? 0) == 1;
-          final res = await KiojuApi.addLink(
-            url: r['url'] as String,
-            title: r['title'] as String?,
-            tags:
-                (r['tags'] as String? ?? '')
-                    .split(',')
-                    .where((e) => e.isNotEmpty)
-                    .toList(),
-            isPrivate: isPrivate ? '1' : '0',
-          );
-
-          // Check if the response indicates success
-          if (res['success'] == true) {
-            final id =
-                (res['link_id'] ?? res['id'] ?? res['remote_id'] ?? '')
-                    .toString();
-            if (id.isNotEmpty) {
-              await database.update(
-                'links',
-                {
-                  'remote_id': id,
-                  'updated_at': DateTime.now().toIso8601String(),
-                },
-                where: 'id=?',
-                whereArgs: [r['id']],
-              );
-              ok++;
-            } else {
-              // API returned success but no ID - this is unusual but not necessarily an error
-              ok++;
-            }
-          } else {
-            // API returned success=false
-            failed++;
-            lastError = res['message']?.toString() ?? 'Unknown API error';
-          }
-        } on RateLimitException catch (e) {
-          // Stop processing if rate limited
-          lastError = e.message;
-          break;
-        } on AuthenticationException catch (e) {
-          lastError = e.message;
-          break;
-        } on AuthorizationException catch (e) {
-          lastError = e.message;
-          break;
-        } catch (e) {
-          failed++;
-          lastError = e.toString();
-          // Continue processing other links
-        }
-      }
+      // Use the CollectionService's efficient sync method
+      final syncResult = await _collectionService.syncUp();
 
       _hideProgressDialog();
 
       if (mounted) {
-        if (lastError != null &&
-            (lastError.contains('Rate limited') ||
-                lastError.contains('Invalid') ||
-                lastError.contains('forbidden') ||
-                lastError.contains('Authentication') ||
-                lastError.contains('Authorization'))) {
-          // Show specific error for auth/rate limit issues only
+        if (syncResult['success'] == true) {
+          final collectionsCount = syncResult['collections_synced'] ?? 0;
+          final linksCount = syncResult['links_synced'] ?? 0;
+          final totalSynced = collectionsCount + linksCount;
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(lastError),
-              duration: const Duration(seconds: 8),
-              backgroundColor:
-                  lastError.contains('Rate limited')
-                      ? Colors.orange
-                      : Colors.red,
-              action:
-                  lastError.contains('Rate limited')
-                      ? null
-                      : SnackBarAction(
-                        label: 'Settings',
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SettingsPage(),
-                            ),
-                          );
-                        },
-                      ),
+              content: Text('Synced $totalSynced items successfully'),
+              backgroundColor: Colors.green,
             ),
           );
-        } else if (ok > 0 || failed == 0) {
-          // Show success message if any uploads succeeded or no failures
-          String message = 'Pushed $ok links successfully';
-          if (failed > 0) {
-            message += ' ($failed failed)';
-          }
+        } else {
+          final errors = syncResult['errors'] as List<String>? ?? [];
+          final errorMessage = errors.isNotEmpty 
+              ? errors.first 
+              : 'Sync failed with unknown error';
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(message),
-              backgroundColor: failed > 0 ? Colors.orange : Colors.green,
-            ),
-          );
-        } else if (failed > 0 && ok == 0) {
-          // Only show error if everything failed and we have a specific error
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(lastError ?? 'Upload failed: Unknown error'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
+              content: Text('Sync failed: $errorMessage'),
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
       }
+
       await _refresh();
+    } catch (e) {
+      _hideProgressDialog();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -915,32 +1492,14 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          // Search Section
-          Container(
-            margin: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                hintText: 'Search links...',
-                hintStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-              ),
-              onChanged: (_) => _refresh(),
-            ),
+          // Enhanced Search Section
+          EnhancedSearchBar(
+            searchController: _searchCtrl,
+            collections: collections,
+            selectedCollection: _selectedCollection,
+            onSearchChanged: _onSearchChanged,
+            onCollectionChanged: _onCollectionFilterChanged,
+            showCollectionFilter: _isPremium == true,
           ),
 
           // Links List Header
@@ -949,46 +1508,131 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               children: [
                 Text(
-                  'Your Links',
+                  _isPremium == true ? 'Your Collections' : 'Your Links',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${items.length}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 12,
+                if (_isPremium == true) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${collections.length}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${items.length} links',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ] else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${items.length}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
 
           const SizedBox(height: 8),
 
-          // Links List
+          // Search results indicator
+          if (_selectedCollection != null || _searchCtrl.text.trim().isNotEmpty)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _buildSearchResultsText(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Collection Tree or Links List
           Expanded(
-            child:
-                items.isEmpty
+            child: _isPremium == true
+                ? (collections.isEmpty && uncategorizedLinks.isEmpty && !_isLoadingCollections)
+                    ? _buildEmptyState()
+                    : CollectionTreeWidget(
+                        key: collectionTreeKey,
+                        collections: collections,
+                        uncategorizedLinks: uncategorizedLinks,
+                        onLinkTap: (link) => _openUrl(link.url),
+                        onLinkEdit: _showEditLinkDialog,
+                        onLinkDelete: (link) => _showDeleteConfirmation(link.id!),
+                        onLinkCopy: (link) => _copyToClipboard(link.url),
+                        onCollectionEdit: _editCollection,
+                        onCollectionDelete: _deleteCollection,
+                        onCreateCollection: _createCollection,
+                        onLinkMoved: _moveLink,
+                        onBulkOperation: _showBulkOperationsDialog,
+                        isLoading: _isLoadingCollections,
+                      )
+                : items.isEmpty
                     ? _buildEmptyState()
                     : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: items.length,
-                      itemBuilder: (context, i) => _buildLinkCard(items[i], i),
-                    ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) => _buildLinkCard(items[i], i),
+                      ),
           ),
         ],
       ),
@@ -1083,7 +1727,11 @@ class _HomePageState extends State<HomePage> {
                   await Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SettingsPage()),
                   );
-                  if (mounted) setState(() {});
+                  if (mounted) {
+                    setState(() {});
+                    _checkFirstTimeSetup();
+                    await _refresh();
+                  }
                 },
         icon: const Icon(Icons.settings),
         tooltip: 'Settings',
@@ -1111,11 +1759,13 @@ class _HomePageState extends State<HomePage> {
       case 'settings':
         Navigator.of(context)
             .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
-            .then((_) {
+            .then((_) async {
               // Check if token was set and refresh UI
               if (mounted) {
                 setState(() {});
                 _checkFirstTimeSetup();
+                // Refresh all data in case database was cleared or other changes were made
+                await _refresh();
               }
             });
         break;
@@ -1393,249 +2043,235 @@ class _HomePageState extends State<HomePage> {
       final database = await db;
 
       // Check if URL already exists (case-insensitive duplicate detection)
-      // We preserve original URL case but check for duplicates ignoring case
       final inputUrl = result['url'] as String;
 
       // Get all existing URLs and check for case-insensitive matches
       final allExistingLinks = await database.query('links');
-      final matchingLinks =
-          allExistingLinks.where((link) {
-            final existingUrl = link['url'] as String;
+      final matchingLinks = allExistingLinks.where((link) {
+        final existingUrl = link['url'] as String;
 
-            // Simple case-insensitive comparison for exact matches
-            if (existingUrl.toLowerCase() == inputUrl.toLowerCase()) {
-              return true;
-            }
+        // Simple case-insensitive comparison for exact matches
+        if (existingUrl.toLowerCase() == inputUrl.toLowerCase()) {
+          return true;
+        }
 
-            // Check for common URL variations (www, trailing slash, protocol)
-            // but preserve case in actual comparison
-            try {
-              final existingUri = Uri.parse(existingUrl);
-              final inputUri = Uri.parse(inputUrl);
+        // Check for common URL variations (www, trailing slash, protocol)
+        try {
+          final existingUri = Uri.parse(existingUrl);
+          final inputUri = Uri.parse(inputUrl);
 
-              // Compare normalized versions (case-insensitive)
-              final existingNormalized =
-                  Uri(
-                    scheme: existingUri.scheme.toLowerCase(),
-                    host: existingUri.host.toLowerCase().replaceAll(
-                      RegExp(r'^www\.'),
-                      '',
-                    ),
-                    port: existingUri.hasPort ? existingUri.port : null,
-                    path:
-                        existingUri.path.endsWith('/') &&
-                                existingUri.path.length > 1
-                            ? existingUri.path.substring(
-                              0,
-                              existingUri.path.length - 1,
-                            )
-                            : existingUri.path,
-                    query:
-                        existingUri.query.isNotEmpty ? existingUri.query : null,
-                  ).toString().toLowerCase();
+          // Compare normalized versions (case-insensitive)
+          final existingNormalized = Uri(
+            scheme: existingUri.scheme.toLowerCase(),
+            host: existingUri.host.toLowerCase().replaceAll(RegExp(r'^www\.'), ''),
+            port: existingUri.hasPort ? existingUri.port : null,
+            path: existingUri.path.endsWith('/') && existingUri.path.length > 1
+                ? existingUri.path.substring(0, existingUri.path.length - 1)
+                : existingUri.path,
+            query: existingUri.query.isNotEmpty ? existingUri.query : null,
+          ).toString().toLowerCase();
 
-              final inputNormalized =
-                  Uri(
-                    scheme: inputUri.scheme.toLowerCase(),
-                    host: inputUri.host.toLowerCase().replaceAll(
-                      RegExp(r'^www\.'),
-                      '',
-                    ),
-                    port: inputUri.hasPort ? inputUri.port : null,
-                    path:
-                        inputUri.path.endsWith('/') && inputUri.path.length > 1
-                            ? inputUri.path.substring(
-                              0,
-                              inputUri.path.length - 1,
-                            )
-                            : inputUri.path,
-                    query: inputUri.query.isNotEmpty ? inputUri.query : null,
-                  ).toString().toLowerCase();
+          final inputNormalized = Uri(
+            scheme: inputUri.scheme.toLowerCase(),
+            host: inputUri.host.toLowerCase().replaceAll(RegExp(r'^www\.'), ''),
+            port: inputUri.hasPort ? inputUri.port : null,
+            path: inputUri.path.endsWith('/') && inputUri.path.length > 1
+                ? inputUri.path.substring(0, inputUri.path.length - 1)
+                : inputUri.path,
+            query: inputUri.query.isNotEmpty ? inputUri.query : null,
+          ).toString().toLowerCase();
 
-              return existingNormalized == inputNormalized;
-            } catch (e) {
-              // If URI parsing fails, fall back to simple comparison
-              return false;
-            }
-          }).toList();
+          return existingNormalized == inputNormalized;
+        } catch (e) {
+          return false;
+        }
+      }).toList();
 
       if (matchingLinks.isNotEmpty && mounted) {
         // URL already exists, show options to user
         final existingLink = matchingLinks.first;
         final shouldUpdate = await showDialog<bool>(
           context: context,
-          builder:
-              (context) => AlertDialog(
-                title: Row(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Duplicate Link Found'),
-                  ],
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Theme.of(context).colorScheme.error,
                 ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('This URL already exists in your collection:'),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outline.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 8),
+                const Text('Duplicate Link Found'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('This URL already exists in your collection:'),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.link,
-                                size: 16,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Existing Link',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.labelMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                          Icon(
+                            Icons.link,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(width: 6),
                           Text(
-                            existingLink['title'] as String? ?? 'No title',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            existingLink['url'] as String,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (existingLink['notes'] != null &&
-                              (existingLink['notes'] as String).isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              existingLink['notes'] as String,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          Text(
-                            'Added: ${_formatDate(existingLink['created_at'] as String?)}',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
+                            'Existing Link',
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Would you like to update the existing link with the new information?',
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        existingLink['title'] as String? ?? 'No title',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        existingLink['url'] as String,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (existingLink['notes'] != null && (existingLink['notes'] as String).isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          existingLink['notes'] as String,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        'Added: ${_formatDate(existingLink['created_at'] as String?)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Keep Original'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Update Link'),
-                  ),
-                ],
+                const SizedBox(height: 16),
+                const Text('Would you like to update the existing link with the new information?'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Keep Original'),
               ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Update Link'),
+              ),
+            ],
+          ),
         );
 
         if (shouldUpdate == true) {
-          // Update existing link
-          await database.update(
-            'links',
-            {
-              'title': result['title'],
-              'tags': (result['tags'] as List<String>).join(','),
-              'notes':
-                  result['description'], // Store description in notes field
-              'is_private': result['isPrivate'] == true ? 1 : 0,
-              'updated_at': DateTime.now().toIso8601String(),
-            },
-            where: 'id = ?',
-            whereArgs: [existingLink['id']],
+          // Update existing link using LinkService
+          try {
+            final linkId = existingLink['id'] as int;
+            final syncResult = await _linkService.updateLink(
+              linkId: linkId,
+              title: result['title'],
+              description: result['description'],
+              tags: result['tags'] as List<String>,
+              isPrivate: result['isPrivate'] == true,
+            );
+
+            await _refresh();
+
+            if (mounted) {
+              final message = LinkService.formatSyncResultMessage(syncResult, 'Link updated');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(
+                        syncResult.success ? Icons.check : Icons.error,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(message)),
+                    ],
+                  ),
+                  backgroundColor: syncResult.success
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.error,
+                  duration: Duration(seconds: syncResult.success ? 3 : 5),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to update link: ${e.toString()}'),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+              );
+            }
+          }
+        }
+      } else {
+        // URL doesn't exist, add new link using LinkService
+        try {
+          final syncResult = await _linkService.createLink(
+            url: result['url'],
+            title: result['title'],
+            description: result['description'],
+            tags: result['tags'] as List<String>,
+            isPrivate: result['isPrivate'] == true,
           );
 
           await _refresh();
 
           if (mounted) {
+            final message = LinkService.formatSyncResultMessage(syncResult, 'Link added');
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Link updated successfully')),
-            );
-          }
-        }
-        // If shouldUpdate is false or null, do nothing (keep original)
-      } else {
-        // URL doesn't exist, add new link
-        try {
-          await database.insert('links', {
-            'url': result['url'],
-            'title': result['title'],
-            'tags': (result['tags'] as List<String>).join(','),
-            'notes': result['description'], // Store description in notes field
-            'is_private':
-                result['isPrivate'] == true ? 1 : 0, // Store privacy setting
-          });
-
-          await _refresh();
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Link added successfully')),
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(
+                      syncResult.success ? Icons.check : Icons.error,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(message)),
+                  ],
+                ),
+                backgroundColor: syncResult.success
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.error,
+                duration: Duration(seconds: syncResult.success ? 3 : 5),
+              ),
             );
           }
         } catch (e) {
-          // Handle database constraint violations
           if (mounted) {
             String errorMessage = 'Failed to add link';
             if (e.toString().contains('UNIQUE constraint failed')) {
@@ -1665,53 +2301,36 @@ class _HomePageState extends State<HomePage> {
     final result = await showEditLinkDialog(context, item);
     if (result != null) {
       try {
-        final database = await db;
-
-        // Update local database first
-        await database.update(
-          'links',
-          {
-            'title': result['title'],
-            'tags': (result['tags'] as List<String>).join(','),
-            'notes': result['description'], // Store description in notes field
-            'is_private': result['isPrivate'] == true ? 1 : 0,
-            'updated_at': DateTime.now().toIso8601String(),
-          },
-          where: 'id = ?',
-          whereArgs: [item.id],
+        final syncResult = await _linkService.updateLink(
+          linkId: item.id!,
+          title: result['title'],
+          description: result['description'],
+          tags: result['tags'] as List<String>,
+          isPrivate: result['isPrivate'] == true,
+          collection: item.collection,
         );
-
-        // If the item has a remote_id, try to update it on the server
-        if (item.remoteId != null && item.remoteId!.isNotEmpty) {
-          try {
-            await KiojuApi.updateLink(
-              id: item.remoteId!,
-              title: result['title'],
-              description: result['description'],
-              isPrivate: result['isPrivate'] == true ? '1' : '0',
-              tags: result['tags'] as List<String>,
-            );
-          } catch (e) {
-            // If server update fails, show warning but keep local changes
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Link updated locally, but server update failed: ${e.toString()}',
-                  ),
-                  backgroundColor: Colors.orange,
-                  duration: const Duration(seconds: 5),
-                ),
-              );
-            }
-          }
-        }
 
         await _refresh();
 
         if (mounted) {
+          final message = LinkService.formatSyncResultMessage(syncResult, 'Link updated');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Link updated successfully')),
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    syncResult.success ? Icons.check : Icons.error,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
+              ),
+              backgroundColor: syncResult.success
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
+              duration: Duration(seconds: syncResult.success ? 3 : 5),
+            ),
           );
         }
       } catch (e) {

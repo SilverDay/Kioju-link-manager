@@ -1,12 +1,11 @@
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import '../db.dart';
 import '../models/link.dart';
 import '../utils/bookmark_export.dart';
 import '../utils/bookmark_import.dart';
 import '../services/kioju_api.dart';
+import '../services/import_service.dart';
 
 class LinkSelectionItem {
   final String url;
@@ -701,20 +700,29 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
     setState(() => isLoading = true);
 
     try {
-      // Perform the actual import operation here directly
-      final database = await _getDatabase();
-      final batch = database.batch();
+      // Convert selected links to ImportedBookmark format
+      final importedBookmarks = selectedLinks.map((item) => ImportedBookmark(
+        item.url,
+        title: item.title == 'Untitled Link' ? null : item.title,
+        collection: item.collection,
+        tags: item.tags,
+      )).toList();
 
-      for (final item in selectedLinks) {
-        batch.insert('links', {
-          'url': item.url,
-          'title': item.title == 'Untitled Link' ? null : item.title,
-          'tags': item.tags.join(','),
-          'collection': item.collection,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      }
+      // Create a mock ImportResult for the import service
+      final importResult = ImportResult(
+        bookmarks: importedBookmarks,
+        collectionsCreated: [],
+        collectionConflicts: [],
+        conflictResolutions: {},
+      );
 
-      await batch.commit(noResult: true);
+      // Use the import service to handle sync strategy
+      final importSyncResult = await ImportService.instance.importLinksWithSync(
+        importResult,
+        (completed, total) {
+          // Progress callback - could update UI if needed
+        },
+      );
 
       // Clear selections and show success message
       setState(() {
@@ -727,12 +735,16 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Successfully copied ${selectedLinks.length} links to Kioju',
-            ),
-            backgroundColor: Colors.green,
+            content: Text(importSyncResult.statusMessage),
+            backgroundColor: importSyncResult.isCompleteSuccess ? Colors.green : Colors.orange,
           ),
         );
+
+        // Return import results to parent
+        Navigator.of(context).pop({
+          'imported': true,
+          'count': importSyncResult.totalLinksProcessed,
+        });
       }
     } catch (e) {
       setState(() => isLoading = false);
@@ -812,9 +824,6 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
   }
 
   // Helper methods for file operations
-  Future<Database> _getDatabase() async {
-    return AppDb.instance();
-  }
 
   String _exportToNetscapeHtml(List<LinkItem> links) {
     return exportToNetscapeHtml(links);
