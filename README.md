@@ -32,8 +32,12 @@ A modern, cross-platform Flutter application for managing Kioju links with seaml
 
 #### Downloading Pre-built Releases
 1. Go to the [Releases page](https://github.com/SilverDay/Kioju-link-manager/releases)
-2. Download the appropriate package for your platform
-3. **For macOS users**: See [MACOS_INSTALLATION.md](MACOS_INSTALLATION.md) for instructions on handling security warnings
+2. Download the appropriate package for your platform:
+   - **Windows**: Download the `.msix` installer
+   - **macOS**: Download the `.app` bundle
+   - **Linux**: Download the AppImage or build from source
+3. **For Windows users**: See [WINDOWS_INSTALLATION.md](WINDOWS_INSTALLATION.md) for MSIX installation instructions
+4. **For macOS users**: See [MACOS_INSTALLATION.md](MACOS_INSTALLATION.md) for instructions on handling security warnings
 
 #### Building from Source
 ```powershell
@@ -75,15 +79,40 @@ flutter run -d windows   # or -d macos / -d linux
 - Manage your API token securely
 - View sync status and app information
 
-## 🏗 Building for Windows
+## 🏗 Building for Production
 
-The application requires Visual Studio Build Tools for Windows compilation:
+### Windows MSIX Installer
+
+Build a professional Windows installer package:
 
 ```powershell
-# Build for Windows release
+# Build the Windows release
 flutter build windows --release
 
-# The executable will be in build\windows\x64\runner\Release\
+# Create the MSIX installer
+flutter pub run msix:create
+
+# Output: build\windows\x64\runner\Release\kioju_link_manager.msix
+```
+
+See [WINDOWS_INSTALLATION.md](WINDOWS_INSTALLATION.md) for complete installation and distribution guide.
+
+### macOS Application
+
+```bash
+# Build for macOS release
+flutter build macos --release
+
+# The .app bundle will be in build/macos/Build/Products/Release/
+```
+
+### Linux
+
+```bash
+# Build for Linux release
+flutter build linux --release
+
+# The executable will be in build/linux/x64/release/bundle/
 ```
 
 ## 📁 Project Structure

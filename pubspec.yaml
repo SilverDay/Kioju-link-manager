@@ -29,6 +29,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
   path_provider_platform_interface: ^2.1.2
   plugin_platform_interface: ^2.1.8
+  msix: ^3.16.7
 
 flutter:
   uses-material-design: true
@@ -46,3 +47,15 @@ flutter_launcher_icons:
   macos:
     generate: true
     image_path: "assets/kioju-icon.png"
+
+# MSIX configuration for Windows installer
+msix_config:
+  display_name: Kioju Link Manager
+  publisher_display_name: SilverDay
+  identity_name: com.silverday.kiojulinkmanager
+  msix_version: 2.0.0.0
+  logo_path: assets\kioju-icon.png
+  capabilities: internetClient
+  description: Cross-platform Flutter app to manage Kioju links and bookmarks
+  publisher: CN=SilverDay
+  languages: en-us
