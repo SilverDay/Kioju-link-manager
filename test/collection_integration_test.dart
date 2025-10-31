@@ -120,7 +120,9 @@ void main() {
         expect(updatedLink.first['collection'], equals(collection.name));
 
         // Verify collection link count
-        final collectionLinks = await collectionService.getCollectionLinks(collection.name);
+        final collectionLinks = await collectionService.getCollectionLinks(
+          collection.name,
+        );
         expect(collectionLinks.length, equals(1));
         expect(collectionLinks.first.url, equals('https://example.com'));
       });
@@ -138,8 +140,12 @@ void main() {
 
       test('should move links between collections', () async {
         // Create two collections
-        final collection1 = await collectionService.createCollection(name: 'Collection 1');
-        final collection2 = await collectionService.createCollection(name: 'Collection 2');
+        final collection1 = await collectionService.createCollection(
+          name: 'Collection 1',
+        );
+        final collection2 = await collectionService.createCollection(
+          name: 'Collection 2',
+        );
 
         // Create a link in collection 1
         final linkId = await database.insert('links', {
@@ -149,7 +155,10 @@ void main() {
         });
 
         // Move link to collection 2
-        await collectionService.assignLinkToCollection(linkId, collection2.name);
+        await collectionService.assignLinkToCollection(
+          linkId,
+          collection2.name,
+        );
 
         // Verify the move
         final updatedLink = await database.query(
@@ -160,8 +169,12 @@ void main() {
         expect(updatedLink.first['collection'], equals(collection2.name));
 
         // Verify link counts
-        final links1 = await collectionService.getCollectionLinks(collection1.name);
-        final links2 = await collectionService.getCollectionLinks(collection2.name);
+        final links1 = await collectionService.getCollectionLinks(
+          collection1.name,
+        );
+        final links2 = await collectionService.getCollectionLinks(
+          collection2.name,
+        );
         expect(links1.length, equals(0));
         expect(links2.length, equals(1));
       });
@@ -197,7 +210,9 @@ void main() {
 
       test('should detect unsynced changes', () async {
         // Create collection and link
-        final collection = await collectionService.createCollection(name: 'Test Collection');
+        final collection = await collectionService.createCollection(
+          name: 'Test Collection',
+        );
         await database.insert('links', {
           'url': 'https://example.com',
           'title': 'Example Link',
@@ -270,21 +285,30 @@ void main() {
         final collections = await collectionService.getCollections();
         expect(collections.length, greaterThanOrEqualTo(2));
 
-        final devCollection = collections.firstWhere((c) => c.name == 'Development');
+        final devCollection = collections.firstWhere(
+          (c) => c.name == 'Development',
+        );
         final newsCollection = collections.firstWhere((c) => c.name == 'News');
-        expect(devCollection.description, equals('Created from bookmark import'));
-        expect(newsCollection.description, equals('Created from bookmark import'));
+        expect(
+          devCollection.description,
+          equals('Created from bookmark import'),
+        );
+        expect(
+          newsCollection.description,
+          equals('Created from bookmark import'),
+        );
 
         // Verify bookmark assignments
-        final devBookmarks = importResult.bookmarks
-            .where((b) => b.collection == 'Development')
-            .toList();
-        final newsBookmarks = importResult.bookmarks
-            .where((b) => b.collection == 'News')
-            .toList();
-        final uncategorizedBookmarks = importResult.bookmarks
-            .where((b) => b.collection == null)
-            .toList();
+        final devBookmarks =
+            importResult.bookmarks
+                .where((b) => b.collection == 'Development')
+                .toList();
+        final newsBookmarks =
+            importResult.bookmarks
+                .where((b) => b.collection == 'News')
+                .toList();
+        final uncategorizedBookmarks =
+            importResult.bookmarks.where((b) => b.collection == null).toList();
 
         expect(devBookmarks.length, equals(2));
         expect(newsBookmarks.length, greaterThanOrEqualTo(1));
@@ -342,7 +366,10 @@ void main() {
         );
 
         expect(importResult.bookmarks.length, equals(1));
-        expect(importResult.bookmarks.first.collection, equals('Development_New'));
+        expect(
+          importResult.bookmarks.first.collection,
+          equals('Development_New'),
+        );
         expect(importResult.collectionsCreated, contains('Development_New'));
       });
     });
@@ -371,8 +398,10 @@ void main() {
 
       test('should delete collection and handle links', () async {
         // Create collection with links
-        final collection = await collectionService.createCollection(name: 'Test Collection');
-        
+        final collection = await collectionService.createCollection(
+          name: 'Test Collection',
+        );
+
         await database.insert('links', {
           'url': 'https://example.com',
           'title': 'Example Link',
@@ -386,7 +415,10 @@ void main() {
         });
 
         // Delete collection with move_links mode
-        await collectionService.deleteCollection(collection.id!, deleteMode: 'move_links');
+        await collectionService.deleteCollection(
+          collection.id!,
+          deleteMode: 'move_links',
+        );
 
         // Verify collection is deleted
         final collections = await collectionService.getCollections();
@@ -402,8 +434,10 @@ void main() {
 
       test('should delete collection and links', () async {
         // Create collection with links
-        final collection = await collectionService.createCollection(name: 'Test Collection');
-        
+        final collection = await collectionService.createCollection(
+          name: 'Test Collection',
+        );
+
         await database.insert('links', {
           'url': 'https://example.com',
           'title': 'Example Link',
@@ -411,7 +445,10 @@ void main() {
         });
 
         // Delete collection with delete_links mode
-        await collectionService.deleteCollection(collection.id!, deleteMode: 'delete_links');
+        await collectionService.deleteCollection(
+          collection.id!,
+          deleteMode: 'delete_links',
+        );
 
         // Verify collection and links are deleted
         final collections = await collectionService.getCollections();

@@ -85,10 +85,8 @@ class AppDb {
           await db.execute(
             'ALTER TABLE links ADD COLUMN is_dirty INTEGER DEFAULT 0',
           );
-          await db.execute(
-            'ALTER TABLE links ADD COLUMN last_synced_at TEXT',
-          );
-          
+          await db.execute('ALTER TABLE links ADD COLUMN last_synced_at TEXT');
+
           // Create collections table
           await db.execute('''
           CREATE TABLE collections (
@@ -104,7 +102,7 @@ class AppDb {
             last_synced_at TEXT
           );
           ''');
-          
+
           // Create collection tags junction table
           await db.execute('''
           CREATE TABLE collection_tags (
@@ -139,25 +137,25 @@ class AppDb {
   /// Update link count for a collection
   static Future<void> updateCollectionLinkCount(int collectionId) async {
     final db = await instance();
-    
+
     // Count links in this collection
-    final countResult = await db.rawQuery('''
+    final countResult = await db.rawQuery(
+      '''
       SELECT COUNT(*) as count 
       FROM links 
       WHERE collection = (
         SELECT name FROM collections WHERE id = ?
       )
-    ''', [collectionId]);
-    
+    ''',
+      [collectionId],
+    );
+
     final count = countResult.first['count'] as int;
-    
+
     // Update collection link count
     await db.update(
       'collections',
-      {
-        'link_count': count,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
+      {'link_count': count, 'updated_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [collectionId],
     );
@@ -166,10 +164,10 @@ class AppDb {
   /// Update all collection link counts
   static Future<void> updateAllCollectionLinkCounts() async {
     final db = await instance();
-    
+
     // Get all collections
     final collections = await db.query('collections');
-    
+
     for (final collection in collections) {
       final collectionId = collection['id'] as int;
       await updateCollectionLinkCount(collectionId);
@@ -181,10 +179,7 @@ class AppDb {
     final db = await instance();
     await db.update(
       'collections',
-      {
-        'is_dirty': 1,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
+      {'is_dirty': 1, 'updated_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [collectionId],
     );
@@ -195,10 +190,7 @@ class AppDb {
     final db = await instance();
     await db.update(
       'links',
-      {
-        'is_dirty': 1,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
+      {'is_dirty': 1, 'updated_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [linkId],
     );
@@ -228,24 +220,16 @@ class AppDb {
   static Future<void> clearAllDirtyFlags() async {
     final db = await instance();
     final now = DateTime.now().toIso8601String();
-    
-    await db.update(
-      'collections',
-      {
-        'is_dirty': 0,
-        'last_synced_at': now,
-      },
-      where: 'is_dirty = 1',
-    );
-    
-    await db.update(
-      'links',
-      {
-        'is_dirty': 0,
-        'last_synced_at': now,
-      },
-      where: 'is_dirty = 1',
-    );
+
+    await db.update('collections', {
+      'is_dirty': 0,
+      'last_synced_at': now,
+    }, where: 'is_dirty = 1');
+
+    await db.update('links', {
+      'is_dirty': 0,
+      'last_synced_at': now,
+    }, where: 'is_dirty = 1');
   }
 
   // Test support method

@@ -24,17 +24,21 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _init();
-    
+
     // Listen for premium status changes
-    PremiumStatusService.instance.addStatusChangeListener(_onPremiumStatusChanged);
+    PremiumStatusService.instance.addStatusChangeListener(
+      _onPremiumStatusChanged,
+    );
   }
-  
+
   @override
   void dispose() {
-    PremiumStatusService.instance.removeStatusChangeListener(_onPremiumStatusChanged);
+    PremiumStatusService.instance.removeStatusChangeListener(
+      _onPremiumStatusChanged,
+    );
     super.dispose();
   }
-  
+
   void _onPremiumStatusChanged() {
     if (mounted) {
       setState(() {
@@ -189,37 +193,56 @@ class _SettingsPageState extends State<SettingsPage> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _isPremium 
-                          ? Theme.of(context).colorScheme.tertiaryContainer
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color:
+                            _isPremium
+                                ? Theme.of(
+                                  context,
+                                ).colorScheme.tertiaryContainer
+                                : Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
                           Icon(
                             _isPremium ? Icons.diamond : Icons.info_outline,
-                            color: _isPremium
-                              ? Theme.of(context).colorScheme.onTertiaryContainer
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                _isPremium
+                                    ? Theme.of(
+                                      context,
+                                    ).colorScheme.onTertiaryContainer
+                                    : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              _isPremium 
-                                ? 'Premium account - All features available'
-                                : 'Free account - Some features require premium',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: _isPremium
-                                  ? Theme.of(context).colorScheme.onTertiaryContainer
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
+                              _isPremium
+                                  ? 'Premium account - All features available'
+                                  : 'Free account - Some features require premium',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color:
+                                    _isPremium
+                                        ? Theme.of(
+                                          context,
+                                        ).colorScheme.onTertiaryContainer
+                                        : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
                           if (!_isPremium)
                             TextButton(
-                              onPressed: () => PremiumStatusService.instance.handlePremiumUpgrade(context),
+                              onPressed:
+                                  () => PremiumStatusService.instance
+                                      .handlePremiumUpgrade(context),
                               child: const Text('Upgrade'),
                             ),
                         ],
@@ -233,86 +256,107 @@ class _SettingsPageState extends State<SettingsPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _isCheckingPremium ? null : () async {
-                        final t = _tokenCtrl.text.trim();
-                        final primaryColor =
-                            Theme.of(context).colorScheme.primary;
-                        final errorColor = Theme.of(context).colorScheme.error;
-                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                      onPressed:
+                          _isCheckingPremium
+                              ? null
+                              : () async {
+                                final t = _tokenCtrl.text.trim();
+                                final primaryColor =
+                                    Theme.of(context).colorScheme.primary;
+                                final errorColor =
+                                    Theme.of(context).colorScheme.error;
+                                final scaffoldMessenger = ScaffoldMessenger.of(
+                                  context,
+                                );
 
-                        try {
-                          await KiojuApi.setToken(t.isEmpty ? null : t);
+                                try {
+                                  await KiojuApi.setToken(t.isEmpty ? null : t);
 
-                          // Check premium status after token change
-                          if (t.isNotEmpty) {
-                            setState(() {
-                              _isCheckingPremium = true;
-                            });
-                            
-                            try {
-                              await PremiumStatusService.instance.checkPremiumStatus(forceRefresh: true);
-                            } catch (e) {
-                              // Premium check failed, but token was saved
-                            } finally {
-                              if (mounted) {
-                                setState(() {
-                                  _isCheckingPremium = false;
-                                });
-                              }
-                            }
-                          } else {
-                            // Token was cleared, reset premium status
-                            PremiumStatusService.instance.reset();
-                          }
+                                  // Check premium status after token change
+                                  if (t.isNotEmpty) {
+                                    setState(() {
+                                      _isCheckingPremium = true;
+                                    });
 
-                          if (mounted) {
-                            scaffoldMessenger.showSnackBar(
-                              SnackBar(
-                                content: const Row(
-                                  children: [
-                                    Icon(Icons.check, color: Colors.white),
-                                    SizedBox(width: 8),
-                                    Text('API token saved successfully'),
-                                  ],
-                                ),
-                                backgroundColor: primaryColor,
-                              ),
-                            );
-                          }
-                          await _init();
-                        } catch (e) {
-                          if (mounted) {
-                            scaffoldMessenger.showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.error,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Failed to save API token: ${e.toString()}',
+                                    try {
+                                      await PremiumStatusService.instance
+                                          .checkPremiumStatus(
+                                            forceRefresh: true,
+                                          );
+                                    } catch (e) {
+                                      // Premium check failed, but token was saved
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _isCheckingPremium = false;
+                                        });
+                                      }
+                                    }
+                                  } else {
+                                    // Token was cleared, reset premium status
+                                    PremiumStatusService.instance.reset();
+                                  }
+
+                                  if (mounted) {
+                                    scaffoldMessenger.showSnackBar(
+                                      SnackBar(
+                                        content: const Row(
+                                          children: [
+                                            Icon(
+                                              Icons.check,
+                                              color: Colors.white,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'API token saved successfully',
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: primaryColor,
                                       ),
-                                    ),
-                                  ],
+                                    );
+                                  }
+                                  await _init();
+                                } catch (e) {
+                                  if (mounted) {
+                                    scaffoldMessenger.showSnackBar(
+                                      SnackBar(
+                                        content: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.error,
+                                              color: Colors.white,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Failed to save API token: ${e.toString()}',
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: errorColor,
+                                        duration: const Duration(seconds: 5),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                      icon:
+                          _isCheckingPremium
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                                backgroundColor: errorColor,
-                                duration: const Duration(seconds: 5),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      icon: _isCheckingPremium 
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save),
-                      label: Text(_isCheckingPremium ? 'Checking Premium...' : 'Save API Token'),
+                              )
+                              : const Icon(Icons.save),
+                      label: Text(
+                        _isCheckingPremium
+                            ? 'Checking Premium...'
+                            : 'Save API Token',
+                      ),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -331,10 +375,14 @@ class _SettingsPageState extends State<SettingsPage> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.1),
+                color: Theme.of(
+                  context,
+                ).colorScheme.errorContainer.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.error.withValues(alpha: 0.3),
                 ),
               ),
               child: Column(
@@ -357,9 +405,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       const SizedBox(width: 12),
                       Text(
                         'Database Management',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -371,7 +418,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  
+
                   // Clear Database Button
                   SizedBox(
                     width: double.infinity,
@@ -381,7 +428,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       label: const Text('Clear Local Database'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Theme.of(context).colorScheme.error,
-                        side: BorderSide(color: Theme.of(context).colorScheme.error),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ),
                   ),
@@ -574,7 +623,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                   SnackBar(
                                     content: Row(
                                       children: [
-                                        const Icon(Icons.check, color: Colors.white),
+                                        const Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                        ),
                                         const SizedBox(width: 8),
                                         Text(
                                           value
@@ -583,7 +635,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                         ),
                                       ],
                                     ),
-                                    backgroundColor: Theme.of(context).colorScheme.primary,
+                                    backgroundColor:
+                                        Theme.of(context).colorScheme.primary,
                                     duration: const Duration(seconds: 2),
                                   ),
                                 );
@@ -599,7 +652,10 @@ class _SettingsPageState extends State<SettingsPage> {
                                   SnackBar(
                                     content: Row(
                                       children: [
-                                        const Icon(Icons.error, color: Colors.white),
+                                        const Icon(
+                                          Icons.error,
+                                          color: Colors.white,
+                                        ),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
@@ -608,7 +664,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                         ),
                                       ],
                                     ),
-                                    backgroundColor: Theme.of(context).colorScheme.error,
+                                    backgroundColor:
+                                        Theme.of(context).colorScheme.error,
                                     duration: const Duration(seconds: 4),
                                   ),
                                 );
@@ -803,43 +860,44 @@ class _SettingsPageState extends State<SettingsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear Local Database'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'This will permanently delete all local data including:',
-              style: TextStyle(fontWeight: FontWeight.w500),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Clear Local Database'),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This will permanently delete all local data including:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 12),
+                Text('• All collections'),
+                Text('• All links'),
+                Text('• All settings'),
+                Text('• Sync history'),
+                SizedBox(height: 16),
+                Text(
+                  'This action cannot be undone. You can sync down from the API to restore your data if it exists remotely.',
+                  style: TextStyle(color: Colors.orange),
+                ),
+              ],
             ),
-            SizedBox(height: 12),
-            Text('• All collections'),
-            Text('• All links'),
-            Text('• All settings'),
-            Text('• Sync history'),
-            SizedBox(height: 16),
-            Text(
-              'This action cannot be undone. You can sync down from the API to restore your data if it exists remotely.',
-              style: TextStyle(color: Colors.orange),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
+                child: const Text('Clear Database'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
-            ),
-            child: const Text('Clear Database'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true && mounted) {
@@ -848,30 +906,31 @@ class _SettingsPageState extends State<SettingsPage> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const AlertDialog(
-            content: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('Clearing database...'),
-              ],
-            ),
-          ),
+          builder:
+              (context) => const AlertDialog(
+                content: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Clearing database...'),
+                  ],
+                ),
+              ),
         );
 
         // Clear the database
         final db = await AppDb.instance();
-        
+
         // Delete all data
         await db.delete('collection_tags');
         await db.delete('collections');
         await db.delete('links');
-        
+
         // Close progress dialog
         if (mounted) {
           Navigator.of(context).pop();
-          
+
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -880,7 +939,7 @@ class _SettingsPageState extends State<SettingsPage> {
               duration: Duration(seconds: 3),
             ),
           );
-          
+
           // Refresh the page state
           setState(() {
             // This will trigger a rebuild and refresh any cached data
@@ -890,7 +949,7 @@ class _SettingsPageState extends State<SettingsPage> {
         // Close progress dialog if open
         if (mounted) {
           Navigator.of(context).pop();
-          
+
           // Show error message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

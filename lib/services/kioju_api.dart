@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
-import 'package:sqflite/sqflite.dart';
 import '../utils/security_utils.dart';
-import '../db.dart';
 
 /// Custom exception for rate limiting
 class RateLimitException implements Exception {
@@ -64,77 +62,35 @@ class KiojuApi {
   static DateTime? _lastRateLimitTime;
   static Duration? _rateLimitCooldown;
 
-  /// Sets the API token with automatic fallback storage
-  /// 
-  /// Tries to store the token in secure storage (keychain/credential manager) first.
-  /// If secure storage fails (e.g., on macOS without proper entitlements), 
-  /// automatically falls back to storing the token in the database config table.
-  /// This ensures the token can always be saved, even when secure storage is unavailable.
-  /// 
-  /// **Security Note:** When using database fallback, the token is stored in plaintext
-  /// in the SQLite database, which is less secure than platform keychain storage.
-  /// However, the database is still protected by filesystem permissions and is only
-  /// used when secure storage is unavailable.
-
   static Future<void> setToken(String? token) async {
-    if (token == null || token.isEmpty) {
-      // Delete from both secure storage and database
-      try {
-        await _storage.delete(key: _tokenKey);
-      } catch (e) {
-        // Ignore secure storage deletion errors
-      }
-      try {
-        await _deleteTokenFromDb();
-      } catch (e) {
-        // Ignore database deletion errors
-      }
-      return;
-    }
-
-    // Validate token before storing
-    final validation = SecurityUtils.validateApiToken(token);
-    if (!validation.isValid) {
-      throw ArgumentError('Invalid API token: ${validation.message}');
-    }
-
-    final sanitizedToken = validation.sanitizedValue as String;
-
-    // Try secure storage first
-    bool secureStorageSucceeded = false;
     try {
-      await _storage.write(
-        key: _tokenKey,
-        value: sanitizedToken,
-        aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-        iOptions: const IOSOptions(
-          accessibility: KeychainAccessibility.first_unlock_this_device,
-        ),
-        mOptions: const MacOsOptions(
-          accessibility: KeychainAccessibility.first_unlock_this_device,
-        ),
-        wOptions: const WindowsOptions(),
-        lOptions: const LinuxOptions(),
-      );
-      secureStorageSucceeded = true;
-    } catch (e) {
-      // Secure storage failed, will use database fallback
-    }
+      if (token == null || token.isEmpty) {
+        await _storage.delete(key: _tokenKey);
+      } else {
+        // Validate token before storing
+        final validation = SecurityUtils.validateApiToken(token);
+        if (!validation.isValid) {
+          throw ArgumentError('Invalid API token: ${validation.message}');
+        }
 
-    // If secure storage failed, use database as fallback
-    if (!secureStorageSucceeded) {
-      try {
-        await _saveTokenToDb(sanitizedToken);
-      } catch (e) {
-        throw Exception('Failed to save API token to both secure storage and database: $e');
+        // For macOS, we might need to configure secure storage options
+        await _storage.write(
+          key: _tokenKey,
+          value: validation.sanitizedValue,
+          aOptions: const AndroidOptions(encryptedSharedPreferences: true),
+          iOptions: const IOSOptions(
+            accessibility: KeychainAccessibility.first_unlock_this_device,
+          ),
+          mOptions: const MacOsOptions(
+            accessibility: KeychainAccessibility.first_unlock_this_device,
+          ),
+          wOptions: const WindowsOptions(),
+          lOptions: const LinuxOptions(),
+        );
       }
-    } else {
-      // Secure storage succeeded, ensure database fallback is cleared
-      try {
-        await _deleteTokenFromDb();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
+    } catch (e) {
+      // Re-throw with more context for debugging
+      throw Exception('Failed to save API token: $e');
     }
   }
 
@@ -148,15 +104,10 @@ class KiojuApi {
     }
   }
 
-  /// Helper method to read the token with automatic fallback
-  /// 
-  /// Tries to read from secure storage first, then falls back to database
-  /// if secure storage fails or returns null. This ensures token retrieval
-  /// works regardless of which storage method was used to save it.
+  /// Helper method to read the token with consistent configuration
   static Future<String?> _readToken() async {
-    // Try secure storage first
     try {
-      final token = await _storage.read(
+      return await _storage.read(
         key: _tokenKey,
         aOptions: const AndroidOptions(encryptedSharedPreferences: true),
         iOptions: const IOSOptions(
@@ -168,58 +119,10 @@ class KiojuApi {
         wOptions: const WindowsOptions(),
         lOptions: const LinuxOptions(),
       );
-      if (token != null && token.isNotEmpty) {
-        return token;
-      }
     } catch (e) {
-      // Secure storage failed, will try database fallback
-    }
-
-    // Fallback to database if secure storage failed or returned null
-    try {
-      return await _readTokenFromDb();
-    } catch (e) {
-      // Both storage methods failed
+      // Silent failure - return null if secure storage is not available
       return null;
     }
-  }
-
-  /// Saves the API token to the database config table
-  /// 
-  /// **Security Note:** The token is stored in plaintext in the database.
-  /// This method is only used as a fallback when secure storage is unavailable.
-  static Future<void> _saveTokenToDb(String token) async {
-    final db = await AppDb.instance();
-    await db.insert(
-      'config',
-      {'key': _tokenKey, 'value': token},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  /// Reads the API token from the database config table
-  static Future<String?> _readTokenFromDb() async {
-    final db = await AppDb.instance();
-    final result = await db.query(
-      'config',
-      where: 'key = ?',
-      whereArgs: [_tokenKey],
-      limit: 1,
-    );
-    if (result.isNotEmpty) {
-      return result.first['value'] as String?;
-    }
-    return null;
-  }
-
-  /// Deletes the API token from the database config table
-  static Future<void> _deleteTokenFromDb() async {
-    final db = await AppDb.instance();
-    await db.delete(
-      'config',
-      where: 'key = ?',
-      whereArgs: [_tokenKey],
-    );
   }
 
   /// Gets rate limit status information
@@ -492,9 +395,6 @@ class KiojuApi {
           if (validation.isValid && validation.sanitizedValue != null) {
             sanitized[key] = validation.sanitizedValue;
           }
-        } else if (key == 'message' || key == 'plan' || key == 'error') {
-          // Preserve API response messages and status fields
-          sanitized[key] = value;
         } else {
           // For other string fields, apply basic sanitization
           final cleaned = value.replaceAll(RegExp(r'[<>"\x27]'), '').trim();
@@ -524,12 +424,6 @@ class KiojuApi {
       } else if (value is Map<String, dynamic>) {
         // Recursively sanitize nested objects
         sanitized[key] = _sanitizeApiResponseItem(value);
-      } else if (value == null) {
-        // Preserve null values for API responses
-        sanitized[key] = null;
-      } else {
-        // For any other type, preserve as-is (this includes API response fields)
-        sanitized[key] = value;
       }
     }
 
@@ -770,6 +664,324 @@ class KiojuApi {
     }
   }
 
+  static Future<Map<String, dynamic>> listCollections() async {
+    final token = await _readToken();
+
+    final uri = Uri.parse(
+      _baseUrl,
+    ).replace(queryParameters: {'action': 'collections_list'});
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body);
+      if (data is Map<String, dynamic>) {
+        final result = Map<String, dynamic>.from(data);
+        final collections = result['collections'];
+        if (collections is List) {
+          result['collections'] = _sanitizeApiResponseList(
+            collections
+                .whereType<Map<String, dynamic>>()
+                .map(Map<String, dynamic>.from)
+                .toList(),
+          );
+        }
+        return result;
+      }
+      return {'success': false, 'message': 'Unexpected response format'};
+    } catch (e) {
+      throw Exception('Failed to parse collections response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> createCollection({
+    required String name,
+    String? description,
+    required String visibility,
+    List<String>? tags,
+  }) async {
+    final nameValidation = SecurityUtils.validateTitle(name);
+    if (!nameValidation.isValid) {
+      throw ArgumentError('Invalid collection name: ${nameValidation.message}');
+    }
+    final sanitizedName = nameValidation.sanitizedValue ?? name.trim();
+    if (sanitizedName.isEmpty) {
+      throw ArgumentError('Collection name cannot be empty');
+    }
+
+    String? sanitizedDescription;
+    if (description != null) {
+      final descriptionValidation = SecurityUtils.validateNotes(description);
+      if (!descriptionValidation.isValid) {
+        throw ArgumentError(
+          'Invalid collection description: ${descriptionValidation.message}',
+        );
+      }
+      sanitizedDescription = descriptionValidation.sanitizedValue;
+    }
+
+    if (!_isValidVisibility(visibility)) {
+      throw ArgumentError('Invalid visibility value: $visibility');
+    }
+
+    final tagsValidation = SecurityUtils.validateTags(tags);
+    if (!tagsValidation.isValid) {
+      throw ArgumentError('Invalid collection tags: ${tagsValidation.message}');
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_create',
+      'name': sanitizedName,
+      'visibility': visibility,
+      if (sanitizedDescription != null) 'description': sanitizedDescription,
+    };
+
+    final sanitizedTags =
+        (tagsValidation.sanitizedValue ?? const <String>[]) as List<String>;
+    if (sanitizedTags.isNotEmpty) {
+      form['tags'] = sanitizedTags.join(',');
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final result = Map<String, dynamic>.from(data);
+      final rawCollection = result['collection'];
+      if (rawCollection is Map<String, dynamic>) {
+        result['collection'] = _sanitizeApiResponseItem(
+          Map<String, dynamic>.from(rawCollection),
+        );
+      }
+      return result;
+    } catch (e) {
+      throw Exception('Failed to parse create collection response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateCollection({
+    required String id,
+    required String name,
+    String? description,
+    required String visibility,
+    List<String>? tags,
+  }) async {
+    final sanitizedId = _sanitizeId(id, paramName: 'collection id');
+
+    final nameValidation = SecurityUtils.validateTitle(name);
+    if (!nameValidation.isValid) {
+      throw ArgumentError('Invalid collection name: ${nameValidation.message}');
+    }
+    final sanitizedName = nameValidation.sanitizedValue ?? name.trim();
+    if (sanitizedName.isEmpty) {
+      throw ArgumentError('Collection name cannot be empty');
+    }
+
+    String? sanitizedDescription;
+    if (description != null) {
+      final descriptionValidation = SecurityUtils.validateNotes(description);
+      if (!descriptionValidation.isValid) {
+        throw ArgumentError(
+          'Invalid collection description: ${descriptionValidation.message}',
+        );
+      }
+      sanitizedDescription = descriptionValidation.sanitizedValue;
+    }
+
+    if (!_isValidVisibility(visibility)) {
+      throw ArgumentError('Invalid visibility value: $visibility');
+    }
+
+    final tagsValidation = SecurityUtils.validateTags(tags);
+    if (!tagsValidation.isValid) {
+      throw ArgumentError('Invalid collection tags: ${tagsValidation.message}');
+    }
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_update',
+      'id': sanitizedId,
+      'name': sanitizedName,
+      'visibility': visibility,
+      if (sanitizedDescription != null) 'description': sanitizedDescription,
+    };
+
+    final sanitizedTags =
+        (tagsValidation.sanitizedValue ?? const <String>[]) as List<String>;
+    if (sanitizedTags.isNotEmpty) {
+      form['tags'] = sanitizedTags.join(',');
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return Map<String, dynamic>.from(data);
+    } catch (e) {
+      throw Exception('Failed to parse update collection response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteCollection({
+    required String id,
+    String mode = 'move_links',
+  }) async {
+    final sanitizedId = _sanitizeId(id, paramName: 'collection id');
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_delete',
+      'id': sanitizedId,
+      'mode': mode,
+    };
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return Map<String, dynamic>.from(data);
+    } catch (e) {
+      throw Exception('Failed to parse delete collection response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> assignLinkToCollection({
+    required String linkId,
+    String? collectionId,
+  }) async {
+    final sanitizedLinkId = _sanitizeId(linkId, paramName: 'link id');
+    final sanitizedCollection =
+        collectionId != null
+            ? _sanitizeId(collectionId, paramName: 'collection id')
+            : null;
+
+    final token = await _readToken();
+
+    final form = <String, String>{
+      'action': 'collections_assign_link',
+      'link_id': sanitizedLinkId,
+      'collection_id': sanitizedCollection ?? '',
+    };
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
+
+    try {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return Map<String, dynamic>.from(data);
+    } catch (e) {
+      throw Exception('Failed to parse assign link response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getCollectionLinks(
+    String collectionId,
+  ) async {
+    final sanitizedId = _sanitizeId(collectionId, paramName: 'collection id');
+    final token = await _readToken();
+
+    final uri = Uri.parse(_baseUrl).replace(
+      queryParameters: {
+        'action': 'collections_get_links',
+        'collection_id': sanitizedId,
+      },
+    );
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body);
+      if (data is Map<String, dynamic>) {
+        final result = Map<String, dynamic>.from(data);
+        final links = result['links'];
+        if (links is List) {
+          result['links'] = _sanitizeApiResponseList(
+            links
+                .whereType<Map<String, dynamic>>()
+                .map(Map<String, dynamic>.from)
+                .toList(),
+          );
+        }
+        return result;
+      }
+      return {'success': false, 'message': 'Unexpected response format'};
+    } catch (e) {
+      throw Exception('Failed to parse collection links response: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getUncategorizedLinks() async {
+    final token = await _readToken();
+
+    final uri = Uri.parse(
+      _baseUrl,
+    ).replace(queryParameters: {'action': 'collections_get_uncategorized'});
+
+    final headers = <String, String>{
+      'User-Agent': 'KiojuLinkManager/1.0',
+      if (token != null) 'X-Api-Key': token,
+    };
+
+    final res = await _secureGet(uri, headers);
+
+    try {
+      final data = jsonDecode(res.body);
+      if (data is Map<String, dynamic>) {
+        final result = Map<String, dynamic>.from(data);
+        final links = result['links'];
+        if (links is List) {
+          result['links'] = _sanitizeApiResponseList(
+            links
+                .whereType<Map<String, dynamic>>()
+                .map(Map<String, dynamic>.from)
+                .toList(),
+          );
+        }
+        return result;
+      }
+      return {'success': false, 'message': 'Unexpected response format'};
+    } catch (e) {
+      throw Exception('Failed to parse uncategorized links response: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> checkPremiumStatus() async {
     final token = await _readToken();
 
@@ -786,170 +998,11 @@ class KiojuApi {
 
     try {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      
-      final sanitized = _sanitizeApiResponseItem(data);
-      
-      return sanitized;
+      return _sanitizeApiResponseItem(data);
     } catch (e) {
       throw Exception('Failed to parse API response: $e');
     }
   }
-
-  /// Test with browser-like request format
-  static Future<Map<String, dynamic>> testBrowserLikeRequest() async {
-    final token = await _readToken();
-    
-    if (token == null || token.isEmpty) {
-      return {'error': 'No API token found'};
-    }
-
-    // Try to mimic exactly what a browser extension would send
-    final uri = Uri.parse('https://kioju.de/api/api.php?action=premium_status');
-    
-    final headers = <String, String>{
-      'Accept': 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-      'X-Api-Key': token,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    };
-
-    try {
-      final client = _createSecureClient();
-      final response = await client.get(uri, headers: headers).timeout(_requestTimeout);
-      client.close();
-
-      return {
-        'status_code': response.statusCode,
-        'body': response.body,
-        'headers_sent': headers,
-        'success': response.statusCode == 200,
-      };
-    } catch (e) {
-      return {'error': e.toString()};
-    }
-  }
-
-  /// Test with a completely different token format/approach
-  static Future<Map<String, dynamic>> testAlternativeTokenFormat() async {
-    final token = await _readToken();
-    
-    if (token == null || token.isEmpty) {
-      return {'error': 'No API token found'};
-    }
-
-    // Try different header formats that might work
-    final testCases = [
-      {'Authorization': 'Bearer $token'},
-      {'Authorization': 'Token $token'},
-      {'X-API-Token': token},
-      {'X-Auth-Token': token},
-      {'Api-Key': token},
-      {'X-Api-Key': token}, // Current format
-    ];
-
-    final results = <String, dynamic>{};
-    
-    for (int i = 0; i < testCases.length; i++) {
-      final headers = <String, String>{
-        'User-Agent': 'KiojuLinkManager/1.0',
-        'Content-Type': 'application/x-www-form-urlencoded',
-        ...testCases[i],
-      };
-
-      try {
-        final uri = Uri.parse(_baseUrl).replace(queryParameters: {'action': 'premium_status'});
-        final client = _createSecureClient();
-        final response = await client.get(uri, headers: headers).timeout(_requestTimeout);
-        client.close();
-
-        results['test_${i + 1}_${testCases[i].keys.first}'] = {
-          'status_code': response.statusCode,
-          'body': response.body,
-          'headers': testCases[i],
-        };
-      } catch (e) {
-        results['test_${i + 1}_${testCases[i].keys.first}'] = {
-          'error': e.toString(),
-          'headers': testCases[i],
-        };
-      }
-    }
-
-    return results;
-  }
-
-  /// Test basic API connectivity with current token
-  static Future<Map<String, dynamic>> testApiConnection() async {
-    final token = await _readToken();
-    
-    if (token == null || token.isEmpty) {
-      return {'error': 'No API token found'};
-    }
-
-    // Try the simplest API call first - add action (which should work for any valid token)
-    final uri = Uri.parse(_baseUrl);
-    final headers = <String, String>{
-      'User-Agent': 'KiojuLinkManager/1.0',
-      'X-Api-Key': token,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-
-    try {
-      // Test with a minimal request that should return an error but validate the token
-      final client = _createSecureClient();
-      final response = await client.post(
-        uri, 
-        headers: headers, 
-        body: {'action': 'test'} // Invalid action, but should validate token first
-      ).timeout(_requestTimeout);
-      
-      client.close();
-
-      return {
-        'status_code': response.statusCode,
-        'body': response.body,
-        'token_accepted': response.statusCode != 401, // 401 means invalid token
-        'headers': response.headers.toString(),
-      };
-    } catch (e) {
-      return {'error': e.toString()};
-    }
-  }
-
-  /// Analyze token format without hashing
-  static Future<Map<String, dynamic>> debugTokenInfo() async {
-    final token = await _readToken();
-    
-    if (token == null || token.isEmpty) {
-      return {'error': 'No token found'};
-    }
-    
-    return {
-      'token_length': token.length,
-      'token_preview': '${token.substring(0, 8)}...',
-      'token_full': token,
-      'is_valid_hex': RegExp(r'^[0-9a-fA-F]+$').hasMatch(token),
-      'character_analysis': _analyzeTokenCharacters(token),
-    };
-  }
-
-  static Map<String, dynamic> _analyzeTokenCharacters(String token) {
-    final chars = token.split('');
-    final analysis = <String, dynamic>{};
-    
-    analysis['total_length'] = chars.length;
-    analysis['unique_chars'] = chars.toSet().length;
-    analysis['has_uppercase'] = chars.any((c) => c.toUpperCase() == c && c.toLowerCase() != c);
-    analysis['has_lowercase'] = chars.any((c) => c.toLowerCase() == c && c.toUpperCase() != c);
-    analysis['has_numbers'] = chars.any((c) => '0123456789'.contains(c));
-    analysis['invalid_chars'] = chars.where((c) => !'0123456789abcdefABCDEF'.contains(c)).toList();
-    
-    return analysis;
-  }
-
-  // Debug methods removed for production
 
   static Future<List<Map<String, dynamic>>> searchTags({
     required String query,
@@ -986,283 +1039,25 @@ class KiojuApi {
     }
   }
 
-  // ============================================================================
-  // COLLECTION MANAGEMENT API ENDPOINTS
-  // ============================================================================
-
-  /// List all collections for the authenticated user
-  static Future<Map<String, dynamic>> listCollections() async {
-    final token = await _readToken();
-
-    final uri = Uri.parse(_baseUrl).replace(
-      queryParameters: {'action': 'collections_list'},
-    );
-
-    final headers = <String, String>{
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _secureGet(uri, headers);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse collections list response: $e');
-    }
+  static bool _isValidVisibility(String visibility) {
+    return visibility == 'public' ||
+        visibility == 'private' ||
+        visibility == 'hidden';
   }
 
-  /// Create a new collection
-  static Future<Map<String, dynamic>> createCollection({
-    required String name,
-    String? description,
-    String visibility = 'public',
-    List<String>? tags,
-  }) async {
-    // Validate input
-    if (name.trim().isEmpty) {
-      throw ArgumentError('Collection name cannot be empty');
-    }
-    if (name.length > 100) {
-      throw ArgumentError('Collection name cannot exceed 100 characters');
-    }
-    if (description != null && description.length > 2000) {
-      throw ArgumentError('Collection description cannot exceed 2000 characters');
-    }
-    if (!['public', 'private', 'hidden'].contains(visibility)) {
-      throw ArgumentError('Invalid visibility setting');
+  static String _sanitizeId(String id, {String paramName = 'id'}) {
+    final trimmed = id.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('$paramName cannot be empty');
     }
 
-    final token = await _readToken();
-
-    final form = <String, String>{
-      'action': 'collections_create',
-      'name': name.trim(),
-      'visibility': visibility,
-    };
-
-    if (description != null && description.trim().isNotEmpty) {
-      form['description'] = description.trim();
+    final sanitized = trimmed
+        .replaceAll(RegExp(r'[<>"]'), '')
+        .replaceAll("'", '');
+    if (sanitized.isEmpty) {
+      throw ArgumentError('Invalid $paramName');
     }
 
-    if (tags != null && tags.isNotEmpty) {
-      form['tags'] = jsonEncode(tags);
-    }
-
-    final headers = <String, String>{
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse create collection response: $e');
-    }
-  }
-
-  /// Update an existing collection
-  static Future<Map<String, dynamic>> updateCollection({
-    required String id,
-    String? name,
-    String? description,
-    String? visibility,
-    List<String>? tags,
-  }) async {
-    // Validate ID
-    if (id.trim().isEmpty) {
-      throw ArgumentError('Collection ID cannot be empty');
-    }
-
-    // Validate optional parameters
-    if (name != null) {
-      if (name.trim().isEmpty) {
-        throw ArgumentError('Collection name cannot be empty');
-      }
-      if (name.length > 100) {
-        throw ArgumentError('Collection name cannot exceed 100 characters');
-      }
-    }
-
-    if (description != null && description.length > 2000) {
-      throw ArgumentError('Collection description cannot exceed 2000 characters');
-    }
-
-    if (visibility != null && !['public', 'private', 'hidden'].contains(visibility)) {
-      throw ArgumentError('Invalid visibility setting');
-    }
-
-    final token = await _readToken();
-
-    final form = <String, String>{
-      'action': 'collections_update',
-      'id': id.trim(),
-    };
-
-    if (name != null) {
-      form['name'] = name.trim();
-    }
-
-    if (description != null) {
-      form['description'] = description.trim();
-    }
-
-    if (visibility != null) {
-      form['visibility'] = visibility;
-    }
-
-    if (tags != null) {
-      form['tags'] = jsonEncode(tags);
-    }
-
-    final headers = <String, String>{
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse update collection response: $e');
-    }
-  }
-
-  /// Delete a collection
-  static Future<Map<String, dynamic>> deleteCollection({
-    required String id,
-    String deleteMode = 'move_links',
-  }) async {
-    // Validate ID
-    if (id.trim().isEmpty) {
-      throw ArgumentError('Collection ID cannot be empty');
-    }
-
-    // Validate delete mode
-    if (!['move_links', 'delete_links'].contains(deleteMode)) {
-      throw ArgumentError('Invalid delete mode: must be "move_links" or "delete_links"');
-    }
-
-    final token = await _readToken();
-
-    final form = <String, String>{
-      'action': 'collections_delete',
-      'id': id.trim(),
-      'delete_mode': deleteMode,
-    };
-
-    final headers = <String, String>{
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse delete collection response: $e');
-    }
-  }
-
-  /// Assign a link to a collection
-  static Future<Map<String, dynamic>> assignLinkToCollection({
-    required String linkId,
-    String? collectionId,
-  }) async {
-    // Validate link ID
-    if (linkId.trim().isEmpty) {
-      throw ArgumentError('Link ID cannot be empty');
-    }
-
-    final token = await _readToken();
-
-    final form = <String, String>{
-      'action': 'collections_assign_link',
-      'link_id': linkId.trim(),
-    };
-
-    if (collectionId != null && collectionId.trim().isNotEmpty) {
-      form['collection_id'] = collectionId.trim();
-    }
-
-    final headers = <String, String>{
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _securePost(Uri.parse(_baseUrl), headers, form);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse assign link response: $e');
-    }
-  }
-
-  /// Get links within a specific collection
-  static Future<Map<String, dynamic>> getCollectionLinks(String collectionId) async {
-    // Validate collection ID
-    if (collectionId.trim().isEmpty) {
-      throw ArgumentError('Collection ID cannot be empty');
-    }
-
-    final token = await _readToken();
-
-    final uri = Uri.parse(_baseUrl).replace(
-      queryParameters: {
-        'action': 'collections_get_links',
-        'id': collectionId.trim(),
-      },
-    );
-
-    final headers = <String, String>{
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _secureGet(uri, headers);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse collection links response: $e');
-    }
-  }
-
-  /// Get uncategorized links (not assigned to any collection)
-  static Future<Map<String, dynamic>> getUncategorizedLinks() async {
-    final token = await _readToken();
-
-    final uri = Uri.parse(_baseUrl).replace(
-      queryParameters: {'action': 'collections_get_uncategorized'},
-    );
-
-    final headers = <String, String>{
-      'User-Agent': 'KiojuLinkManager/1.0',
-      if (token != null) 'X-Api-Key': token,
-    };
-
-    final res = await _secureGet(uri, headers);
-
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return _sanitizeApiResponseItem(data);
-    } catch (e) {
-      throw Exception('Failed to parse uncategorized links response: $e');
-    }
+    return sanitized;
   }
 }

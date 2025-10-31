@@ -5,7 +5,6 @@ import 'sync_strategy.dart';
 import 'immediate_sync_strategy.dart';
 import 'manual_sync_strategy.dart';
 
-
 /// Result of an import operation with sync information
 class ImportSyncResult {
   final ImportResult importResult;
@@ -28,10 +27,15 @@ class ImportSyncResult {
   bool get isCompleteSuccess => syncErrors.isEmpty;
 
   /// Whether the import had partial failures
-  bool get hasPartialFailures => syncErrors.isNotEmpty && (linksSuccessfullySynced > 0 || linksMarkedForSync > 0);
+  bool get hasPartialFailures =>
+      syncErrors.isNotEmpty &&
+      (linksSuccessfullySynced > 0 || linksMarkedForSync > 0);
 
   /// Whether the import failed completely
-  bool get isCompleteFailure => linksSuccessfullySynced == 0 && linksMarkedForSync == 0 && syncErrors.isNotEmpty;
+  bool get isCompleteFailure =>
+      linksSuccessfullySynced == 0 &&
+      linksMarkedForSync == 0 &&
+      syncErrors.isNotEmpty;
 
   /// Get a user-friendly status message
   String get statusMessage {
@@ -56,12 +60,12 @@ class ImportSyncResult {
 /// Service for handling bookmark imports with configurable sync behavior
 class ImportService {
   static ImportService? _instance;
-  
+
   static ImportService get instance {
     _instance ??= ImportService._();
     return _instance!;
   }
-  
+
   ImportService._();
 
   /// Import bookmarks from HTML content with configurable sync
@@ -118,12 +122,13 @@ class ImportService {
 
     // Get sync preference
     final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-    final SyncStrategy strategy = isImmediateSync ? ImmediateSyncStrategy() : ManualSyncStrategy();
+    final SyncStrategy strategy =
+        isImmediateSync ? ImmediateSyncStrategy() : ManualSyncStrategy();
 
     // Insert links into local database first
     final db = await AppDb.instance();
     final linkDataList = <Map<String, dynamic>>[];
-    
+
     for (final bookmark in importResult.bookmarks) {
       try {
         // Insert link into database
@@ -192,7 +197,8 @@ class ImportService {
         // For immediate sync failures, count successful vs failed
         final failedCount = syncResult.failedItemIds.length;
         linksSuccessfullySynced = linkDataList.length - failedCount;
-        linksMarkedForSync = failedCount; // Failed items are marked for later sync
+        linksMarkedForSync =
+            failedCount; // Failed items are marked for later sync
       } else {
         // For manual sync, if there's an error, nothing was marked for sync
         linksMarkedForSync = 0;

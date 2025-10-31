@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted && response['success'] == true) {
         final wasPremium = _isPremium;
         final isPremium = response['is_premium'] == true;
-        
+
         setState(() {
           _isPremium = isPremium;
         });
@@ -162,7 +162,9 @@ class _HomePageState extends State<HomePage> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
+                      .push(
+                        MaterialPageRoute(builder: (_) => const SettingsPage()),
+                      )
                       .then((_) async {
                         if (mounted) {
                           setState(() {});
@@ -239,17 +241,17 @@ class _HomePageState extends State<HomePage> {
   Future<void> _refresh() async {
     final q = _searchCtrl.text.trim();
     final database = await db;
-    
+
     // Build where clause for search and collection filtering
     List<String> whereConditions = [];
     List<dynamic> whereArgs = [];
-    
+
     // Add search conditions
     if (q.isNotEmpty) {
       whereConditions.add('(url LIKE ? OR title LIKE ? OR notes LIKE ?)');
       whereArgs.addAll(['%$q%', '%$q%', '%$q%']);
     }
-    
+
     // Add collection filtering
     if (_selectedCollection != null) {
       if (_selectedCollection!.name == '_uncategorized') {
@@ -261,7 +263,7 @@ class _HomePageState extends State<HomePage> {
         whereArgs.add(_selectedCollection!.name);
       }
     }
-    
+
     // Load filtered links
     final rows = await database.query(
       'links',
@@ -271,17 +273,22 @@ class _HomePageState extends State<HomePage> {
       limit: 500,
     );
     final allLinks = rows.map((r) => LinkItem.fromMap(r)).toList();
-    
+
     // Load collections if premium user
     if (_isPremium == true) {
       await _loadCollections();
-      
+
       // Separate uncategorized links (only if not filtering by collection)
-      final uncategorized = _selectedCollection == null 
-          ? allLinks.where((link) => 
-              link.collection == null || link.collection!.isEmpty).toList()
-          : <LinkItem>[];
-      
+      final uncategorized =
+          _selectedCollection == null
+              ? allLinks
+                  .where(
+                    (link) =>
+                        link.collection == null || link.collection!.isEmpty,
+                  )
+                  .toList()
+              : <LinkItem>[];
+
       setState(() {
         items = allLinks;
         uncategorizedLinks = uncategorized;
@@ -298,7 +305,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadCollections() async {
     if (_isLoadingCollections) return;
-    
+
     setState(() {
       _isLoadingCollections = true;
     });
@@ -339,7 +346,7 @@ class _HomePageState extends State<HomePage> {
     final searchQuery = _searchCtrl.text.trim();
     final hasSearch = searchQuery.isNotEmpty;
     final hasCollectionFilter = _selectedCollection != null;
-    
+
     if (hasSearch && hasCollectionFilter) {
       if (_selectedCollection!.name == '_uncategorized') {
         return 'Showing uncategorized links matching "$searchQuery" (${items.length} results)';
@@ -355,7 +362,7 @@ class _HomePageState extends State<HomePage> {
         return 'Showing links in "${_selectedCollection!.name}" (${items.length} links)';
       }
     }
-    
+
     return '';
   }
 
@@ -364,13 +371,14 @@ class _HomePageState extends State<HomePage> {
 
     await showDialog<void>(
       context: context,
-      builder: (context) => BulkOperationsDialog(
-        selectedLinks: selectedLinks,
-        collections: collections,
-        onOperationComplete: () {
-          _refresh(); // Refresh the view after bulk operation
-        },
-      ),
+      builder:
+          (context) => BulkOperationsDialog(
+            selectedLinks: selectedLinks,
+            collections: collections,
+            onOperationComplete: () {
+              _refresh(); // Refresh the view after bulk operation
+            },
+          ),
     );
   }
 
@@ -381,7 +389,10 @@ class _HomePageState extends State<HomePage> {
       await _refresh();
 
       if (mounted) {
-        final message = LinkService.formatSyncResultMessage(syncResult, 'Link deleted');
+        final message = LinkService.formatSyncResultMessage(
+          syncResult,
+          'Link deleted',
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -394,9 +405,10 @@ class _HomePageState extends State<HomePage> {
                 Expanded(child: Text(message)),
               ],
             ),
-            backgroundColor: syncResult.success
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.error,
+            backgroundColor:
+                syncResult.success
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.error,
             duration: Duration(seconds: syncResult.success ? 3 : 5),
           ),
         );
@@ -439,9 +451,15 @@ class _HomePageState extends State<HomePage> {
       ImportResult initialResult;
       if (path.endsWith('.html') ||
           text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
-        initialResult = await importFromNetscapeHtml(text, createCollections: true);
+        initialResult = await importFromNetscapeHtml(
+          text,
+          createCollections: true,
+        );
       } else if (path.endsWith('.json')) {
-        initialResult = await importFromChromeJson(jsonDecode(text), createCollections: true);
+        initialResult = await importFromChromeJson(
+          jsonDecode(text),
+          createCollections: true,
+        );
       } else {
         throw Exception('Unsupported file format');
       }
@@ -462,16 +480,17 @@ class _HomePageState extends State<HomePage> {
       Map<String, String>? collectionMappings;
       if (initialResult.collectionConflicts.isNotEmpty) {
         _hideProgressDialog();
-        
+
         if (mounted) {
           await showDialog<void>(
             context: context,
-            builder: (context) => ImportConflictDialog(
-              conflictingCollections: initialResult.collectionConflicts,
-              onResolved: (resolutions) {
-                collectionMappings = resolutions;
-              },
-            ),
+            builder:
+                (context) => ImportConflictDialog(
+                  conflictingCollections: initialResult.collectionConflicts,
+                  onResolved: (resolutions) {
+                    collectionMappings = resolutions;
+                  },
+                ),
           );
         }
 
@@ -482,7 +501,9 @@ class _HomePageState extends State<HomePage> {
       }
 
       // Second pass: Import with sync strategy
-      _updateProgressDialog('Importing ${initialResult.bookmarks.length} links...');
+      _updateProgressDialog(
+        'Importing ${initialResult.bookmarks.length} links...',
+      );
 
       ImportSyncResult importSyncResult;
       if (path.endsWith('.html') ||
@@ -512,11 +533,12 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         await showDialog<void>(
           context: context,
-          builder: (context) => ImportSummaryDialog(
-            importResult: importSyncResult.importResult,
-            linksImported: importSyncResult.totalLinksProcessed,
-            syncResult: importSyncResult,
-          ),
+          builder:
+              (context) => ImportSummaryDialog(
+                importResult: importSyncResult.importResult,
+                linksImported: importSyncResult.totalLinksProcessed,
+                syncResult: importSyncResult,
+              ),
         );
 
         // Always refresh after import
@@ -607,213 +629,194 @@ class _HomePageState extends State<HomePage> {
     }
 
     final result = await showCreateCollectionDialog(context);
-    if (result != null) {
-      try {
-        await _collectionService.createCollection(
-          name: result['name'],
-          description: result['description'],
-          visibility: result['visibility'],
-        );
-        
-        if (mounted) {
-          // Show success message based on sync preference
-          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-          final message = isImmediateSync 
+    if (result == null) return;
+
+    try {
+      await _collectionService.createCollection(
+        name: result['name'],
+        description: result['description'],
+        visibility: result['visibility'],
+      );
+
+      final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+      if (!mounted) return;
+      final message =
+          isImmediateSync
               ? 'Collection created and synced successfully'
               : 'Collection created locally. Use sync to upload changes.';
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message)),
-                ],
-              ),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-            ),
-          );
-          await _refresh();
-        }
-      } catch (e) {
-        if (mounted) {
-          // Check if this is a sync failure
-          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-          String message;
-          
-          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
-            message = 'Collection created locally, but server sync failed: ${e.toString()}';
-          } else {
-            message = 'Failed to create collection: ${e.toString()}';
-          }
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message)),
-                ],
-              ),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-          
-          // Still refresh to show the locally created collection
-          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
-            await _refresh();
-          }
-        }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+      await _refresh();
+    } catch (e) {
+      final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+      final syncFailed =
+          isImmediateSync && e.toString().contains('Sync operation failed');
+      if (!mounted) return;
+      final message =
+          syncFailed
+              ? 'Collection created locally, but server sync failed: ${e.toString()}'
+              : 'Failed to create collection: ${e.toString()}';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      if (syncFailed) {
+        await _refresh();
       }
     }
   }
 
   Future<void> _editCollection(Collection collection) async {
     final result = await showEditCollectionDialog(context, collection);
-    if (result != null) {
-      try {
-        await _collectionService.updateCollection(
-          id: result['id'],
-          name: result['name'],
-          description: result['description'],
-          visibility: result['visibility'],
-        );
-        
-        if (mounted) {
-          // Show success message based on sync preference
-          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-          final message = isImmediateSync 
+    if (result == null) return;
+
+    try {
+      await _collectionService.updateCollection(
+        id: result['id'],
+        name: result['name'],
+        description: result['description'],
+        visibility: result['visibility'],
+      );
+
+      final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+      if (!mounted) return;
+      final message =
+          isImmediateSync
               ? 'Collection updated and synced successfully'
               : 'Collection updated locally. Use sync to upload changes.';
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message)),
-                ],
-              ),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-            ),
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+
+      await _refresh();
+
+      if (result['name'] != collection.name) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final updatedCollection = collections.firstWhere(
+            (c) => c.id == collection.id,
+            orElse: () => collection,
           );
-          
-          // Refresh data first to get updated collection info
-          await _refresh();
-          
-          // Then refresh the specific collection if it was renamed
-          if (result['name'] != collection.name) {
-            // Wait for the widget to rebuild with new collections data
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              // Find the updated collection in the new data
-              final updatedCollection = collections.firstWhere(
-                (c) => c.id == collection.id,
-                orElse: () => collection,
-              );
-              collectionTreeKey.currentState?.refreshCollection(updatedCollection);
-            });
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          // Check if this is a sync failure
-          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-          String message;
-          
-          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
-            message = 'Collection updated locally, but server sync failed: ${e.toString()}';
-          } else {
-            message = 'Failed to update collection: ${e.toString()}';
-          }
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message)),
-                ],
-              ),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-          
-          // Still refresh to show the locally updated collection
-          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
-            await _refresh();
-          }
-        }
+          collectionTreeKey.currentState?.refreshCollection(updatedCollection);
+        });
+      }
+    } catch (e) {
+      final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+      final syncFailed =
+          isImmediateSync && e.toString().contains('Sync operation failed');
+      if (!mounted) return;
+      final message =
+          syncFailed
+              ? 'Collection updated locally, but server sync failed: ${e.toString()}'
+              : 'Failed to update collection: ${e.toString()}';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      if (syncFailed) {
+        await _refresh();
       }
     }
   }
 
   Future<void> _deleteCollection(Collection collection) async {
     final result = await showDeleteCollectionDialog(context, collection);
-    if (result != null) {
-      try {
-        await _collectionService.deleteCollection(
-          collection.id!,
-          deleteMode: result['linkHandling'],
-        );
-        
-        if (mounted) {
-          // Show success message based on sync preference
-          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-          final message = isImmediateSync 
+    if (result == null) return;
+
+    try {
+      await _collectionService.deleteCollection(
+        collection.id!,
+        deleteMode: result['linkHandling'],
+      );
+
+      final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+      if (!mounted) return;
+      final message =
+          isImmediateSync
               ? 'Collection deleted and synced successfully'
               : 'Collection deleted locally. Use sync to upload changes.';
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message)),
-                ],
-              ),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-            ),
-          );
-          await _refresh();
-        }
-      } catch (e) {
-        if (mounted) {
-          // Check if this is a sync failure
-          final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-          String message;
-          
-          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
-            message = 'Collection deleted locally, but server sync failed: ${e.toString()}';
-          } else {
-            message = 'Failed to delete collection: ${e.toString()}';
-          }
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(message)),
-                ],
-              ),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-          
-          // Still refresh to show the updated state
-          if (isImmediateSync && e.toString().contains('Sync operation failed')) {
-            await _refresh();
-          }
-        }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+      await _refresh();
+    } catch (e) {
+      final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
+      final syncFailed =
+          isImmediateSync && e.toString().contains('Sync operation failed');
+      if (!mounted) return;
+      final message =
+          syncFailed
+              ? 'Collection deleted locally, but server sync failed: ${e.toString()}'
+              : 'Failed to delete collection: ${e.toString()}';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      if (syncFailed) {
+        await _refresh();
       }
     }
   }
@@ -824,52 +827,47 @@ class _HomePageState extends State<HomePage> {
         linkId: link.id!,
         toCollection: collectionId,
       );
-      
-      if (mounted) {
-        final operationName = collectionId == null 
-            ? 'Link moved to uncategorized'
-            : 'Link moved to collection';
-        final message = LinkService.formatSyncResultMessage(syncResult, operationName);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  syncResult.success ? Icons.check : Icons.error,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 8),
-                Expanded(child: Text(message)),
-              ],
-            ),
-            backgroundColor: syncResult.success
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.error,
-            duration: Duration(seconds: syncResult.success ? 3 : 5),
+
+      if (!mounted) return;
+      final operationName =
+          collectionId == null
+              ? 'Link moved to uncategorized'
+              : 'Link moved to collection';
+      final message = LinkService.formatSyncResultMessage(
+        syncResult,
+        operationName,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                syncResult.success ? Icons.check : Icons.error,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
           ),
-        );
-        await _refresh();
-      }
+          backgroundColor:
+              syncResult.success
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.error,
+          duration: Duration(seconds: syncResult.success ? 3 : 5),
+        ),
+      );
+      await _refresh();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to move link: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to move link: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     }
   }
-
-
-
-
-
-
-
-
 
   Future<void> _pull() async {
     if (_isSyncing) return; // Prevent multiple simultaneous syncs
@@ -885,7 +883,8 @@ class _HomePageState extends State<HomePage> {
       try {
         final hasUnsynced = await _collectionService.hasUnsyncedChanges();
         if (hasUnsynced) {
-          final unsyncedCounts = await _collectionService.getUnsyncedChangesCount();
+          final unsyncedCounts =
+              await _collectionService.getUnsyncedChangesCount();
           if (!mounted) return;
           final action = await showSyncConflictDialog(
             context,
@@ -911,7 +910,9 @@ class _HomePageState extends State<HomePage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Warning: Could not check for local changes: ${e.toString()}'),
+              content: Text(
+                'Warning: Could not check for local changes: ${e.toString()}',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -943,15 +944,15 @@ class _HomePageState extends State<HomePage> {
 
       // For premium users, fetch links via collections to get proper categorization
       List<Map<String, dynamic>> allRemoteLinks = [];
-      
+
       if (_isPremium == true) {
         // First sync collections to ensure we have the latest collection list
         _updateProgressDialog('Syncing collections...');
         try {
-          await _collectionService.syncDown(forceOverwrite: _forceOverwriteOnSync);
-
+          await _collectionService.syncDown(
+            forceOverwrite: _forceOverwriteOnSync,
+          );
         } catch (e) {
-
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -965,50 +966,51 @@ class _HomePageState extends State<HomePage> {
         // Get all collections from collection service AFTER sync is complete
         // This ensures we get the most up-to-date collection list
         final collectionObjects = await _collectionService.getCollections();
-        final collections = collectionObjects
-            .where((c) => c.remoteId != null)
-            .map((c) => {
-              'name': c.name,
-              'remote_id': c.remoteId,
-              'id': c.id,
-            })
-            .toList();
-        
+        final collections =
+            collectionObjects
+                .where((c) => c.remoteId != null)
+                .map(
+                  (c) => {'name': c.name, 'remote_id': c.remoteId, 'id': c.id},
+                )
+                .toList();
 
-        
         // Fetch links for each collection
         for (int i = 0; i < collections.length; i++) {
           final collection = collections[i];
           final collectionName = collection['name'] as String;
           final remoteId = collection['remote_id'] as String;
-          
-          _updateProgressDialog('Downloading links from "$collectionName" (${i + 1}/${collections.length})...');
-          
+
+          _updateProgressDialog(
+            'Downloading links from "$collectionName" (${i + 1}/${collections.length})...',
+          );
+
           try {
             final response = await KiojuApi.getCollectionLinks(remoteId);
 
-            
             if (response['success'] == true && response['links'] != null) {
               final linksList = response['links'] as List<dynamic>;
               final collectionLinks = linksList.cast<Map<String, dynamic>>();
-              
+
               // Add collection name to each link
               for (final link in collectionLinks) {
                 link['_collection_name'] = collectionName;
               }
-              
+
               allRemoteLinks.addAll(collectionLinks);
             }
           } catch (e) {
             // Check if this is a 404 error (collection doesn't exist on API)
-            if (e.toString().contains('404') || e.toString().contains('not found')) {
+            if (e.toString().contains('404') ||
+                e.toString().contains('not found')) {
               // Don't show error to user for 404s, just continue with other collections
             } else {
               // Show error for other types of failures
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Failed to sync collection "$collectionName": ${e.toString()}'),
+                    content: Text(
+                      'Failed to sync collection "$collectionName": ${e.toString()}',
+                    ),
                     backgroundColor: Colors.orange,
                   ),
                 );
@@ -1022,23 +1024,24 @@ class _HomePageState extends State<HomePage> {
         try {
           final response = await KiojuApi.getUncategorizedLinks();
 
-          
           if (response['success'] == true && response['links'] != null) {
             final linksList = response['links'] as List<dynamic>;
             final uncategorizedLinks = linksList.cast<Map<String, dynamic>>();
-            
+
             // Mark these as uncategorized (no collection)
             for (final link in uncategorizedLinks) {
               link['_collection_name'] = null;
             }
-            
+
             allRemoteLinks.addAll(uncategorizedLinks);
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Failed to sync uncategorized links: ${e.toString()}'),
+                content: Text(
+                  'Failed to sync uncategorized links: ${e.toString()}',
+                ),
                 backgroundColor: Colors.orange,
               ),
             );
@@ -1081,17 +1084,18 @@ class _HomePageState extends State<HomePage> {
         final title = (m['title'] ?? '') as String?;
         final description = (m['description'] ?? '') as String?;
         final isPrivate = m['is_private'];
-        final collectionName = m['_collection_name'] as String?; // Collection info from our API calls
+        final collectionName =
+            m['_collection_name']
+                as String?; // Collection info from our API calls
 
         // Improved tag parsing - extract slugs from tag objects
         final tags = _parseTagsFromApi(m['tags']);
 
         final id = (m['id'] ?? m['remote_id'] ?? '').toString();
-        
 
-        
         // Use INSERT OR REPLACE to handle URL conflicts properly
-        batch.rawInsert('''
+        batch.rawInsert(
+          '''
           INSERT OR REPLACE INTO links (
             url, title, notes, tags, collection, is_private, remote_id, 
             created_at, updated_at
@@ -1099,20 +1103,22 @@ class _HomePageState extends State<HomePage> {
             COALESCE((SELECT created_at FROM links WHERE url = ?), CURRENT_TIMESTAMP),
             CURRENT_TIMESTAMP
           )
-        ''', [
-          url,
-          (title?.isNotEmpty ?? false) ? title : null,
-          (description?.isNotEmpty ?? false) ? description : null,
-          tags,
-          collectionName,
-          (isPrivate is bool
-                  ? isPrivate
-                  : (isPrivate == 1 || isPrivate == '1'))
-              ? 1
-              : 0,
-          id.isNotEmpty ? id : null,
-          url, // For the COALESCE created_at lookup
-        ]);
+        ''',
+          [
+            url,
+            (title?.isNotEmpty ?? false) ? title : null,
+            (description?.isNotEmpty ?? false) ? description : null,
+            tags,
+            collectionName,
+            (isPrivate is bool
+                    ? isPrivate
+                    : (isPrivate == 1 || isPrivate == '1'))
+                ? 1
+                : 0,
+            id.isNotEmpty ? id : null,
+            url, // For the COALESCE created_at lookup
+          ],
+        );
 
         processed++;
         if (processed % 10 == 0) {
@@ -1124,19 +1130,17 @@ class _HomePageState extends State<HomePage> {
 
       _updateProgressDialog('Saving to database...');
       await batch.commit(noResult: true);
-      
+
       // Debug: Check what's actually in the database after sync
       final dbInstance = await db;
       final allLinks = await dbInstance.query('links');
       final collectionsInDb = <String, int>{};
-      
+
       for (final link in allLinks) {
         final collection = link['collection'] as String?;
         final key = collection ?? 'UNCATEGORIZED';
         collectionsInDb[key] = (collectionsInDb[key] ?? 0) + 1;
       }
-      
-
 
       // Update collection link counts after sync
       await _collectionService.updateCollectionLinkCounts();
@@ -1173,7 +1177,9 @@ class _HomePageState extends State<HomePage> {
               label: 'Settings',
               onPressed: () {
                 Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
+                    .push(
+                      MaterialPageRoute(builder: (_) => const SettingsPage()),
+                    )
                     .then((_) async {
                       if (mounted) {
                         setState(() {});
@@ -1198,7 +1204,9 @@ class _HomePageState extends State<HomePage> {
               label: 'Settings',
               onPressed: () {
                 Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
+                    .push(
+                      MaterialPageRoute(builder: (_) => const SettingsPage()),
+                    )
                     .then((_) async {
                       if (mounted) {
                         setState(() {});
@@ -1282,9 +1290,9 @@ class _HomePageState extends State<HomePage> {
       final pendingChanges = await _collectionService.getPendingChangesCount();
       if (pendingChanges['total'] == 0) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No changes to sync')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No changes to sync')));
         }
         setState(() {
           _isSyncing = false;
@@ -1304,7 +1312,7 @@ class _HomePageState extends State<HomePage> {
           final collectionsCount = syncResult['collections_synced'] ?? 0;
           final linksCount = syncResult['links_synced'] ?? 0;
           final totalSynced = collectionsCount + linksCount;
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Synced $totalSynced items successfully'),
@@ -1313,10 +1321,11 @@ class _HomePageState extends State<HomePage> {
           );
         } else {
           final errors = syncResult['errors'] as List<String>? ?? [];
-          final errorMessage = errors.isNotEmpty 
-              ? errors.first 
-              : 'Sync failed with unknown error';
-          
+          final errorMessage =
+              errors.isNotEmpty
+                  ? errors.first
+                  : 'Sync failed with unknown error';
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Sync failed: $errorMessage'),
@@ -1546,7 +1555,8 @@ class _HomePageState extends State<HomePage> {
                     child: Text(
                       '${items.length} links',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer,
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
                       ),
@@ -1608,31 +1618,35 @@ class _HomePageState extends State<HomePage> {
 
           // Collection Tree or Links List
           Expanded(
-            child: _isPremium == true
-                ? (collections.isEmpty && uncategorizedLinks.isEmpty && !_isLoadingCollections)
-                    ? _buildEmptyState()
-                    : CollectionTreeWidget(
-                        key: collectionTreeKey,
-                        collections: collections,
-                        uncategorizedLinks: uncategorizedLinks,
-                        onLinkTap: (link) => _openUrl(link.url),
-                        onLinkEdit: _showEditLinkDialog,
-                        onLinkDelete: (link) => _showDeleteConfirmation(link.id!),
-                        onLinkCopy: (link) => _copyToClipboard(link.url),
-                        onCollectionEdit: _editCollection,
-                        onCollectionDelete: _deleteCollection,
-                        onCreateCollection: _createCollection,
-                        onLinkMoved: _moveLink,
-                        onBulkOperation: _showBulkOperationsDialog,
-                        isLoading: _isLoadingCollections,
-                      )
-                : items.isEmpty
+            child:
+                _isPremium == true
+                    ? (collections.isEmpty &&
+                            uncategorizedLinks.isEmpty &&
+                            !_isLoadingCollections)
+                        ? _buildEmptyState()
+                        : CollectionTreeWidget(
+                          key: collectionTreeKey,
+                          collections: collections,
+                          uncategorizedLinks: uncategorizedLinks,
+                          onLinkTap: (link) => _openUrl(link.url),
+                          onLinkEdit: _showEditLinkDialog,
+                          onLinkDelete:
+                              (link) => _showDeleteConfirmation(link.id!),
+                          onLinkCopy: (link) => _copyToClipboard(link.url),
+                          onCollectionEdit: _editCollection,
+                          onCollectionDelete: _deleteCollection,
+                          onCreateCollection: _createCollection,
+                          onLinkMoved: _moveLink,
+                          onBulkOperation: _showBulkOperationsDialog,
+                          isLoading: _isLoadingCollections,
+                        )
+                    : items.isEmpty
                     ? _buildEmptyState()
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: items.length,
-                        itemBuilder: (context, i) => _buildLinkCard(items[i], i),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: items.length,
+                      itemBuilder: (context, i) => _buildLinkCard(items[i], i),
+                    ),
           ),
         ],
       ),
@@ -1757,17 +1771,19 @@ class _HomePageState extends State<HomePage> {
         _push();
         break;
       case 'settings':
-        Navigator.of(context)
-            .push(MaterialPageRoute(builder: (_) => const SettingsPage()))
-            .then((_) async {
-              // Check if token was set and refresh UI
-              if (mounted) {
-                setState(() {});
-                _checkFirstTimeSetup();
-                // Refresh all data in case database was cleared or other changes were made
-                await _refresh();
-              }
-            });
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SettingsPage())).then((
+          _,
+        ) async {
+          // Check if token was set and refresh UI
+          if (mounted) {
+            setState(() {});
+            _checkFirstTimeSetup();
+            // Refresh all data in case database was cleared or other changes were made
+            await _refresh();
+          }
+        });
         break;
     }
   }
@@ -2047,148 +2063,194 @@ class _HomePageState extends State<HomePage> {
 
       // Get all existing URLs and check for case-insensitive matches
       final allExistingLinks = await database.query('links');
-      final matchingLinks = allExistingLinks.where((link) {
-        final existingUrl = link['url'] as String;
+      final matchingLinks =
+          allExistingLinks.where((link) {
+            final existingUrl = link['url'] as String;
 
-        // Simple case-insensitive comparison for exact matches
-        if (existingUrl.toLowerCase() == inputUrl.toLowerCase()) {
-          return true;
-        }
+            // Simple case-insensitive comparison for exact matches
+            if (existingUrl.toLowerCase() == inputUrl.toLowerCase()) {
+              return true;
+            }
 
-        // Check for common URL variations (www, trailing slash, protocol)
-        try {
-          final existingUri = Uri.parse(existingUrl);
-          final inputUri = Uri.parse(inputUrl);
+            // Check for common URL variations (www, trailing slash, protocol)
+            try {
+              final existingUri = Uri.parse(existingUrl);
+              final inputUri = Uri.parse(inputUrl);
 
-          // Compare normalized versions (case-insensitive)
-          final existingNormalized = Uri(
-            scheme: existingUri.scheme.toLowerCase(),
-            host: existingUri.host.toLowerCase().replaceAll(RegExp(r'^www\.'), ''),
-            port: existingUri.hasPort ? existingUri.port : null,
-            path: existingUri.path.endsWith('/') && existingUri.path.length > 1
-                ? existingUri.path.substring(0, existingUri.path.length - 1)
-                : existingUri.path,
-            query: existingUri.query.isNotEmpty ? existingUri.query : null,
-          ).toString().toLowerCase();
+              // Compare normalized versions (case-insensitive)
+              final existingNormalized =
+                  Uri(
+                    scheme: existingUri.scheme.toLowerCase(),
+                    host: existingUri.host.toLowerCase().replaceAll(
+                      RegExp(r'^www\.'),
+                      '',
+                    ),
+                    port: existingUri.hasPort ? existingUri.port : null,
+                    path:
+                        existingUri.path.endsWith('/') &&
+                                existingUri.path.length > 1
+                            ? existingUri.path.substring(
+                              0,
+                              existingUri.path.length - 1,
+                            )
+                            : existingUri.path,
+                    query:
+                        existingUri.query.isNotEmpty ? existingUri.query : null,
+                  ).toString().toLowerCase();
 
-          final inputNormalized = Uri(
-            scheme: inputUri.scheme.toLowerCase(),
-            host: inputUri.host.toLowerCase().replaceAll(RegExp(r'^www\.'), ''),
-            port: inputUri.hasPort ? inputUri.port : null,
-            path: inputUri.path.endsWith('/') && inputUri.path.length > 1
-                ? inputUri.path.substring(0, inputUri.path.length - 1)
-                : inputUri.path,
-            query: inputUri.query.isNotEmpty ? inputUri.query : null,
-          ).toString().toLowerCase();
+              final inputNormalized =
+                  Uri(
+                    scheme: inputUri.scheme.toLowerCase(),
+                    host: inputUri.host.toLowerCase().replaceAll(
+                      RegExp(r'^www\.'),
+                      '',
+                    ),
+                    port: inputUri.hasPort ? inputUri.port : null,
+                    path:
+                        inputUri.path.endsWith('/') && inputUri.path.length > 1
+                            ? inputUri.path.substring(
+                              0,
+                              inputUri.path.length - 1,
+                            )
+                            : inputUri.path,
+                    query: inputUri.query.isNotEmpty ? inputUri.query : null,
+                  ).toString().toLowerCase();
 
-          return existingNormalized == inputNormalized;
-        } catch (e) {
-          return false;
-        }
-      }).toList();
+              return existingNormalized == inputNormalized;
+            } catch (e) {
+              return false;
+            }
+          }).toList();
 
       if (matchingLinks.isNotEmpty && mounted) {
         // URL already exists, show options to user
         final existingLink = matchingLinks.first;
         final shouldUpdate = await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(width: 8),
-                const Text('Duplicate Link Found'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('This URL already exists in your collection:'),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Theme.of(context).colorScheme.error,
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    const SizedBox(width: 8),
+                    const Text('Duplicate Link Found'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('This URL already exists in your collection:'),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outline.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.link,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.primary,
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.link,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Existing Link',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(height: 8),
                           Text(
-                            'Existing Link',
-                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w600,
+                            existingLink['title'] as String? ?? 'No title',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            existingLink['url'] as String,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (existingLink['notes'] != null &&
+                              (existingLink['notes'] as String).isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              existingLink['notes'] as String,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Added: ${_formatDate(existingLink['created_at'] as String?)}',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        existingLink['title'] as String? ?? 'No title',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        existingLink['url'] as String,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (existingLink['notes'] != null && (existingLink['notes'] as String).isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          existingLink['notes'] as String,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      Text(
-                        'Added: ${_formatDate(existingLink['created_at'] as String?)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Would you like to update the existing link with the new information?',
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                const Text('Would you like to update the existing link with the new information?'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Keep Original'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Keep Original'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Update Link'),
+                  ),
+                ],
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Update Link'),
-              ),
-            ],
-          ),
         );
 
         if (shouldUpdate == true) {
@@ -2206,7 +2268,10 @@ class _HomePageState extends State<HomePage> {
             await _refresh();
 
             if (mounted) {
-              final message = LinkService.formatSyncResultMessage(syncResult, 'Link updated');
+              final message = LinkService.formatSyncResultMessage(
+                syncResult,
+                'Link updated',
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Row(
@@ -2219,9 +2284,10 @@ class _HomePageState extends State<HomePage> {
                       Expanded(child: Text(message)),
                     ],
                   ),
-                  backgroundColor: syncResult.success
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.error,
+                  backgroundColor:
+                      syncResult.success
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.error,
                   duration: Duration(seconds: syncResult.success ? 3 : 5),
                 ),
               );
@@ -2251,7 +2317,10 @@ class _HomePageState extends State<HomePage> {
           await _refresh();
 
           if (mounted) {
-            final message = LinkService.formatSyncResultMessage(syncResult, 'Link added');
+            final message = LinkService.formatSyncResultMessage(
+              syncResult,
+              'Link added',
+            );
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
@@ -2264,9 +2333,10 @@ class _HomePageState extends State<HomePage> {
                     Expanded(child: Text(message)),
                   ],
                 ),
-                backgroundColor: syncResult.success
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.error,
+                backgroundColor:
+                    syncResult.success
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.error,
                 duration: Duration(seconds: syncResult.success ? 3 : 5),
               ),
             );
@@ -2313,7 +2383,10 @@ class _HomePageState extends State<HomePage> {
         await _refresh();
 
         if (mounted) {
-          final message = LinkService.formatSyncResultMessage(syncResult, 'Link updated');
+          final message = LinkService.formatSyncResultMessage(
+            syncResult,
+            'Link updated',
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -2326,9 +2399,10 @@ class _HomePageState extends State<HomePage> {
                   Expanded(child: Text(message)),
                 ],
               ),
-              backgroundColor: syncResult.success
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.error,
+              backgroundColor:
+                  syncResult.success
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.error,
               duration: Duration(seconds: syncResult.success ? 3 : 5),
             ),
           );
