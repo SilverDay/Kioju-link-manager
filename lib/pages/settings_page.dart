@@ -275,6 +275,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             final scaffoldMessenger = ScaffoldMessenger.of(
                               context,
                             );
+                            final primaryColor = Theme.of(context).colorScheme.primary;
+                            final errorColor = Theme.of(context).colorScheme.error;
 
                             try {
                               setState(() {
@@ -300,8 +302,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                         ),
                                       ],
                                     ),
-                                    backgroundColor:
-                                        Theme.of(context).colorScheme.primary,
+                                    backgroundColor: primaryColor,
                                     duration: const Duration(seconds: 2),
                                   ),
                                 );
@@ -329,8 +330,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                         ),
                                       ],
                                     ),
-                                    backgroundColor:
-                                        Theme.of(context).colorScheme.error,
+                                    backgroundColor: errorColor,
                                     duration: const Duration(seconds: 4),
                                   ),
                                 );

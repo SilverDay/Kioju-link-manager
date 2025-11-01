@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:kioju_link_manager/db.dart';
 import 'package:kioju_link_manager/services/collection_service.dart';
-import 'package:kioju_link_manager/utils/bookmark_import.dart';
 
 void main() {
   group('Collection Integration Tests', () {
