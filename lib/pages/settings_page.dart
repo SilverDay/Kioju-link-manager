@@ -347,7 +347,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
             const SizedBox(height: 24),
 
-            // Set API Token Section
+            // API Configuration Section
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -370,7 +370,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Set API Token',
+                        'API Configuration',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: Theme.of(context).colorScheme.onSurface,
