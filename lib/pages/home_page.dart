@@ -1325,12 +1325,15 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Kioju Link Manager',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            Expanded(
+              child: Text(
+                'Kioju Link Manager',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const SizedBox(width: 8),
-            if (_isPremium == true)
+            if (_isPremium == true) ...[
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -1352,8 +1355,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-              )
-            else if (_isPremium == false)
+              ),
+            ] else if (_isPremium == false) ...[
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -1369,6 +1373,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+            ],
           ],
         ),
         actions: [
