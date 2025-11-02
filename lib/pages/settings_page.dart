@@ -620,19 +620,58 @@ class _SettingsPageState extends State<SettingsPage> {
                     'Visit the Kioju website to learn more',
                     'https://kioju.de',
                   ),
-                  const SizedBox(height: 12),
-                  _buildHelpItem(
-                    context,
-                    Icons.sync,
-                    'Synchronization',
-                    'Sync your links across all your devices',
+                  const SizedBox(height: 16),
+                  
+                  // Top Menu Buttons Explanation
+                  Text(
+                    'Top Menu Buttons',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                   const SizedBox(height: 12),
+                  
                   _buildHelpItem(
                     context,
-                    Icons.backup,
-                    'Backup & Restore',
-                    'Import/export your bookmarks in standard formats',
+                    Icons.add_link,
+                    'New Link',
+                    'Add a new bookmark to your collection',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.create_new_folder,
+                    'New Collection',
+                    'Create a new collection to organize your links',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.cloud_download,
+                    'Sync Down',
+                    'Download your links from the Kioju server',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.cloud_upload,
+                    'Sync Up',
+                    'Upload your local changes to the Kioju server',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.file_download,
+                    'Import from Browser',
+                    'Import bookmarks from your browser\'s bookmark file',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.file_upload,
+                    'Export to Browser',
+                    'Export your links to a browser-compatible bookmark file',
                   ),
                   const SizedBox(height: 24),
 
