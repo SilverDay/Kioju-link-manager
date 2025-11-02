@@ -44,37 +44,39 @@ class _EnhancedSearchBarState extends State<EnhancedSearchBar> {
                 Icons.search,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              hintText: widget.selectedCollection != null
-                  ? 'Search in "${widget.selectedCollection!.name}"...'
-                  : 'Search links...',
+              hintText:
+                  widget.selectedCollection != null
+                      ? 'Search in "${widget.selectedCollection!.name}"...'
+                      : 'Search links...',
               hintStyle: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              suffixIcon: widget.showCollectionFilter
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (widget.selectedCollection != null)
+              suffixIcon:
+                  widget.showCollectionFilter
+                      ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.selectedCollection != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 20),
+                              onPressed: () => widget.onCollectionChanged(null),
+                              tooltip: 'Clear collection filter',
+                            ),
                           IconButton(
-                            icon: const Icon(Icons.clear, size: 20),
-                            onPressed: () => widget.onCollectionChanged(null),
-                            tooltip: 'Clear collection filter',
+                            icon: Icon(
+                              _showFilters ? Icons.filter_list : Icons.tune,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showFilters = !_showFilters;
+                              });
+                            },
+                            tooltip: 'Filter options',
                           ),
-                        IconButton(
-                          icon: Icon(
-                            _showFilters ? Icons.filter_list : Icons.tune,
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _showFilters = !_showFilters;
-                            });
-                          },
-                          tooltip: 'Filter options',
-                        ),
-                      ],
-                    )
-                  : null,
+                        ],
+                      )
+                      : null,
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
@@ -112,14 +114,16 @@ class _EnhancedSearchBarState extends State<EnhancedSearchBar> {
                             widget.onCollectionChanged(null);
                           }
                         },
-                        avatar: widget.selectedCollection == null
-                            ? const Icon(Icons.check, size: 16)
-                            : const Icon(Icons.folder_outlined, size: 16),
+                        avatar:
+                            widget.selectedCollection == null
+                                ? const Icon(Icons.check, size: 16)
+                                : const Icon(Icons.folder_outlined, size: 16),
                       ),
                       // Uncategorized chip
                       FilterChip(
                         label: const Text('Uncategorized'),
-                        selected: widget.selectedCollection?.name == '_uncategorized',
+                        selected:
+                            widget.selectedCollection?.name == '_uncategorized',
                         onSelected: (selected) {
                           if (selected) {
                             // Create a special collection object for uncategorized
@@ -131,21 +135,29 @@ class _EnhancedSearchBarState extends State<EnhancedSearchBar> {
                             widget.onCollectionChanged(uncategorized);
                           }
                         },
-                        avatar: widget.selectedCollection?.name == '_uncategorized'
-                            ? const Icon(Icons.check, size: 16)
-                            : const Icon(Icons.folder_open_outlined, size: 16),
+                        avatar:
+                            widget.selectedCollection?.name == '_uncategorized'
+                                ? const Icon(Icons.check, size: 16)
+                                : const Icon(
+                                  Icons.folder_open_outlined,
+                                  size: 16,
+                                ),
                       ),
                       // Individual collection chips
                       ...widget.collections.map(
                         (collection) => FilterChip(
                           label: Text(collection.name),
-                          selected: widget.selectedCollection?.id == collection.id,
+                          selected:
+                              widget.selectedCollection?.id == collection.id,
                           onSelected: (selected) {
-                            widget.onCollectionChanged(selected ? collection : null);
+                            widget.onCollectionChanged(
+                              selected ? collection : null,
+                            );
                           },
-                          avatar: widget.selectedCollection?.id == collection.id
-                              ? const Icon(Icons.check, size: 16)
-                              : const Icon(Icons.folder, size: 16),
+                          avatar:
+                              widget.selectedCollection?.id == collection.id
+                                  ? const Icon(Icons.check, size: 16)
+                                  : const Icon(Icons.folder, size: 16),
                         ),
                       ),
                     ],

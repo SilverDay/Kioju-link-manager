@@ -6,10 +6,11 @@ import 'sync_retry_service.dart';
 /// Handles background execution of sync operations with threading support
 class BackgroundSyncExecutor {
   static final Map<String, CancellationToken> _activeSyncs = {};
-  static final Map<String, StreamController<SyncProgress>> _progressControllers = {};
+  static final Map<String, StreamController<SyncProgress>>
+  _progressControllers = {};
 
   /// Executes a sync operation in the background with cancellation support
-  /// 
+  ///
   /// [operation] - The sync operation to execute
   /// [strategy] - The sync strategy to use
   /// [cancellationToken] - Optional cancellation token
@@ -23,16 +24,16 @@ class BackgroundSyncExecutor {
     bool enableRetry = true,
   }) async {
     final operationId = operation.operationId;
-    
+
     // Check if operation is already running
     if (_activeSyncs.containsKey(operationId)) {
       throw Exception('Sync operation $operationId is already running');
     }
-    
+
     // Create or use provided cancellation token
     final token = cancellationToken ?? CancellationToken();
     _activeSyncs[operationId] = token;
-    
+
     // Create progress controller if progress callback is provided
     StreamController<SyncProgress>? progressController;
     if (onProgress != null) {
@@ -40,11 +41,11 @@ class BackgroundSyncExecutor {
       _progressControllers[operationId] = progressController;
       progressController.stream.listen(onProgress);
     }
-    
+
     try {
       // Report start progress
       progressController?.add(SyncProgress.started(operationId));
-      
+
       // Execute the sync operation
       final result = await _executeSyncWithRetry(
         operation,
@@ -53,14 +54,16 @@ class BackgroundSyncExecutor {
         progressController,
         enableRetry,
       );
-      
+
       // Report completion progress
       if (result.success) {
         progressController?.add(SyncProgress.completed(operationId));
       } else {
-        progressController?.add(SyncProgress.failed(operationId, result.errorMessage));
+        progressController?.add(
+          SyncProgress.failed(operationId, result.errorMessage),
+        );
       }
-      
+
       return result;
     } catch (e) {
       // Report error progress
@@ -121,11 +124,13 @@ class BackgroundSyncExecutor {
         return await strategy.executeSync(operation);
       },
       onRetry: (attempt, error) {
-        progressController?.add(SyncProgress.retrying(
-          operation.operationId,
-          attempt,
-          error.toString(),
-        ));
+        progressController?.add(
+          SyncProgress.retrying(
+            operation.operationId,
+            attempt,
+            error.toString(),
+          ),
+        );
       },
       shouldRetry: (error) {
         // Don't retry if cancelled
@@ -147,73 +152,82 @@ class BackgroundSyncExecutor {
     bool enableRetry = true,
   }) async {
     final token = cancellationToken ?? CancellationToken();
-    final concurrency = maxConcurrency ?? 3; // Default to 3 concurrent operations
+    final concurrency =
+        maxConcurrency ?? 3; // Default to 3 concurrent operations
     final results = <SyncResult>[];
     final errors = <String>[];
-    
+
     int completed = 0;
     int failed = 0;
-    
+
     // Report initial progress
-    onProgress?.call(BulkSyncProgress(
-      totalOperations: operations.length,
-      completedOperations: 0,
-      failedOperations: 0,
-      currentOperation: null,
-      isCompleted: false,
-    ));
-    
+    onProgress?.call(
+      BulkSyncProgress(
+        totalOperations: operations.length,
+        completedOperations: 0,
+        failedOperations: 0,
+        currentOperation: null,
+        isCompleted: false,
+      ),
+    );
+
     // Process operations in batches to limit concurrency
     for (int i = 0; i < operations.length; i += concurrency) {
       token.throwIfCancelled();
-      
+
       final batch = operations.skip(i).take(concurrency).toList();
       final batchFutures = batch.map((operation) async {
         try {
-          onProgress?.call(BulkSyncProgress(
-            totalOperations: operations.length,
-            completedOperations: completed,
-            failedOperations: failed,
-            currentOperation: operation.operationId,
-            isCompleted: false,
-          ));
-          
+          onProgress?.call(
+            BulkSyncProgress(
+              totalOperations: operations.length,
+              completedOperations: completed,
+              failedOperations: failed,
+              currentOperation: operation.operationId,
+              isCompleted: false,
+            ),
+          );
+
           final result = await executeInBackground(
             operation,
             strategy,
             cancellationToken: token,
             enableRetry: enableRetry,
           );
-          
+
           if (result.success) {
             completed++;
           } else {
             failed++;
             errors.add('${operation.operationId}: ${result.errorMessage}');
           }
-          
+
           return result;
         } catch (e) {
           failed++;
           errors.add('${operation.operationId}: ${e.toString()}');
-          return SyncResult.immediateFailure(e.toString(), [operation.operationId]);
+          return SyncResult.immediateFailure(e.toString(), [
+            operation.operationId,
+          ]);
         }
       });
-      
+
       final batchResults = await Future.wait(batchFutures);
       results.addAll(batchResults);
     }
-    
+
     // Report final progress
-    onProgress?.call(BulkSyncProgress(
-      totalOperations: operations.length,
-      completedOperations: completed,
-      failedOperations: failed,
-      currentOperation: null,
-      isCompleted: true,
-      errors: errors,
-    ));
-    
+    onProgress?.call(
+      BulkSyncProgress(
+        totalOperations: operations.length,
+        completedOperations: completed,
+        failedOperations: failed,
+        currentOperation: null,
+        isCompleted: true,
+        errors: errors,
+      ),
+    );
+
     return results;
   }
 }
@@ -264,12 +278,7 @@ class SyncProgress {
   }
 }
 
-enum SyncProgressType {
-  started,
-  completed,
-  failed,
-  retrying,
-}
+enum SyncProgressType { started, completed, failed, retrying }
 
 /// Represents progress of bulk sync operations
 class BulkSyncProgress {

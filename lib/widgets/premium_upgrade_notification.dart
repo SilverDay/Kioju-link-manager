@@ -5,41 +5,47 @@ import '../services/premium_status_service.dart';
 class PremiumUpgradeNotification extends StatefulWidget {
   final String? feature;
   final Widget child;
-  
+
   const PremiumUpgradeNotification({
     super.key,
     this.feature,
     required this.child,
   });
-  
+
   @override
-  State<PremiumUpgradeNotification> createState() => _PremiumUpgradeNotificationState();
+  State<PremiumUpgradeNotification> createState() =>
+      _PremiumUpgradeNotificationState();
 }
 
-class _PremiumUpgradeNotificationState extends State<PremiumUpgradeNotification> {
+class _PremiumUpgradeNotificationState
+    extends State<PremiumUpgradeNotification> {
   bool _isPremium = false;
   bool _hasShownNotification = false;
-  
+
   @override
   void initState() {
     super.initState();
     _isPremium = PremiumStatusService.instance.isPremium;
-    
+
     // Listen for premium status changes
-    PremiumStatusService.instance.addStatusChangeListener(_onPremiumStatusChanged);
-    
+    PremiumStatusService.instance.addStatusChangeListener(
+      _onPremiumStatusChanged,
+    );
+
     // Show notification if feature requires premium and user is not premium
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowNotification();
     });
   }
-  
+
   @override
   void dispose() {
-    PremiumStatusService.instance.removeStatusChangeListener(_onPremiumStatusChanged);
+    PremiumStatusService.instance.removeStatusChangeListener(
+      _onPremiumStatusChanged,
+    );
     super.dispose();
   }
-  
+
   void _onPremiumStatusChanged() {
     if (mounted) {
       setState(() {
@@ -47,18 +53,20 @@ class _PremiumUpgradeNotificationState extends State<PremiumUpgradeNotification>
       });
     }
   }
-  
+
   void _checkAndShowNotification() {
-    if (!_hasShownNotification && 
-        widget.feature != null && 
-        PremiumStatusService.instance.isPremiumRequired(widget.feature!) && 
+    if (!_hasShownNotification &&
+        widget.feature != null &&
+        PremiumStatusService.instance.isPremiumRequired(widget.feature!) &&
         !_isPremium) {
-      
       _hasShownNotification = true;
-      PremiumStatusService.instance.showPremiumNotification(context, feature: widget.feature);
+      PremiumStatusService.instance.showPremiumNotification(
+        context,
+        feature: widget.feature,
+      );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return widget.child;
@@ -68,7 +76,7 @@ class _PremiumUpgradeNotificationState extends State<PremiumUpgradeNotification>
 /// Banner widget that shows premium status
 class PremiumStatusBanner extends StatefulWidget {
   const PremiumStatusBanner({super.key});
-  
+
   @override
   State<PremiumStatusBanner> createState() => _PremiumStatusBannerState();
 }
@@ -76,23 +84,27 @@ class PremiumStatusBanner extends StatefulWidget {
 class _PremiumStatusBannerState extends State<PremiumStatusBanner> {
   bool _isPremium = false;
   bool _isVisible = false;
-  
+
   @override
   void initState() {
     super.initState();
     _isPremium = PremiumStatusService.instance.isPremium;
     _isVisible = !_isPremium;
-    
+
     // Listen for premium status changes
-    PremiumStatusService.instance.addStatusChangeListener(_onPremiumStatusChanged);
+    PremiumStatusService.instance.addStatusChangeListener(
+      _onPremiumStatusChanged,
+    );
   }
-  
+
   @override
   void dispose() {
-    PremiumStatusService.instance.removeStatusChangeListener(_onPremiumStatusChanged);
+    PremiumStatusService.instance.removeStatusChangeListener(
+      _onPremiumStatusChanged,
+    );
     super.dispose();
   }
-  
+
   void _onPremiumStatusChanged() {
     if (mounted) {
       setState(() {
@@ -101,13 +113,13 @@ class _PremiumStatusBannerState extends State<PremiumStatusBanner> {
       });
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     if (!_isVisible) {
       return const SizedBox.shrink();
     }
-    
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -136,7 +148,9 @@ class _PremiumStatusBannerState extends State<PremiumStatusBanner> {
             ),
           ),
           TextButton(
-            onPressed: () => PremiumStatusService.instance.handlePremiumUpgrade(context),
+            onPressed:
+                () =>
+                    PremiumStatusService.instance.handlePremiumUpgrade(context),
             child: const Text('Upgrade'),
           ),
         ],
@@ -148,15 +162,18 @@ class _PremiumStatusBannerState extends State<PremiumStatusBanner> {
 /// Mixin for widgets that need premium feature gating
 mixin PremiumFeatureMixin<T extends StatefulWidget> on State<T> {
   bool get isPremium => PremiumStatusService.instance.isPremium;
-  
+
   bool isPremiumRequired(String feature) {
     return PremiumStatusService.instance.isPremiumRequired(feature);
   }
-  
+
   void showPremiumRequiredDialog(String feature) {
-    PremiumStatusService.instance.showPremiumNotification(context, feature: feature);
+    PremiumStatusService.instance.showPremiumNotification(
+      context,
+      feature: feature,
+    );
   }
-  
+
   bool checkPremiumAccess(String feature) {
     if (isPremiumRequired(feature) && !isPremium) {
       showPremiumRequiredDialog(feature);

@@ -49,15 +49,18 @@ class Collection {
     visibility: map['visibility'] as String? ?? 'public',
     linkCount: map['link_count'] as int? ?? 0,
     isDirty: (map['is_dirty'] as int? ?? 0) == 1,
-    createdAt: map['created_at'] != null 
-      ? DateTime.parse(map['created_at'] as String)
-      : null,
-    updatedAt: map['updated_at'] != null 
-      ? DateTime.parse(map['updated_at'] as String)
-      : null,
-    lastSyncedAt: map['last_synced_at'] != null 
-      ? DateTime.parse(map['last_synced_at'] as String)
-      : null,
+    createdAt:
+        map['created_at'] != null
+            ? DateTime.parse(map['created_at'] as String)
+            : null,
+    updatedAt:
+        map['updated_at'] != null
+            ? DateTime.parse(map['updated_at'] as String)
+            : null,
+    lastSyncedAt:
+        map['last_synced_at'] != null
+            ? DateTime.parse(map['last_synced_at'] as String)
+            : null,
     tags: [], // Tags loaded separately from junction table
   );
 
@@ -67,22 +70,26 @@ class Collection {
     if (name == null || name.isEmpty) {
       throw ArgumentError('Collection name cannot be null or empty');
     }
-    
+
     return Collection(
       remoteId: json['id']?.toString(),
       name: name,
       description: json['description'] as String?,
       visibility: json['visibility'] as String? ?? 'public',
       linkCount: json['link_count'] as int? ?? 0,
-      createdAt: json['created_at'] != null 
-        ? DateTime.tryParse(json['created_at'] as String)
-        : null,
-      updatedAt: json['updated_at'] != null 
-        ? DateTime.tryParse(json['updated_at'] as String)
-        : null,
-      tags: (json['tags'] as List?)
-        ?.map((t) => Tag.fromJson(t as Map<String, dynamic>))
-        .toList() ?? [],
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.tryParse(json['created_at'] as String)
+              : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.tryParse(json['updated_at'] as String)
+              : null,
+      tags:
+          (json['tags'] as List?)
+              ?.map((t) => Tag.fromJson(t as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -122,16 +129,11 @@ class Collection {
   );
 
   /// Mark collection as dirty (needs sync)
-  Collection markDirty() => copyWith(
-    isDirty: true,
-    updatedAt: DateTime.now(),
-  );
+  Collection markDirty() => copyWith(isDirty: true, updatedAt: DateTime.now());
 
   /// Mark collection as synced
-  Collection markSynced() => copyWith(
-    isDirty: false,
-    lastSyncedAt: DateTime.now(),
-  );
+  Collection markSynced() =>
+      copyWith(isDirty: false, lastSyncedAt: DateTime.now());
 
   /// Check if collection has unsynced changes
   bool get hasUnsyncedChanges => isDirty;
@@ -157,16 +159,17 @@ class Collection {
   }
 
   @override
-  String toString() => 'Collection(id: $id, name: $name, linkCount: $linkCount)';
+  String toString() =>
+      'Collection(id: $id, name: $name, linkCount: $linkCount)';
 
   @override
   bool operator ==(Object other) =>
-    identical(this, other) ||
-    other is Collection &&
-    runtimeType == other.runtimeType &&
-    id == other.id &&
-    remoteId == other.remoteId &&
-    name == other.name;
+      identical(this, other) ||
+      other is Collection &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          remoteId == other.remoteId &&
+          name == other.name;
 
   @override
   int get hashCode => Object.hash(id, remoteId, name);
@@ -178,18 +181,10 @@ class Tag {
   final String name;
   final String slug;
 
-  const Tag({
-    this.id,
-    required this.name,
-    required this.slug,
-  });
+  const Tag({this.id, required this.name, required this.slug});
 
   /// Convert tag to database map
-  Map<String, Object?> toMap() => {
-    'id': id,
-    'name': name,
-    'slug': slug,
-  };
+  Map<String, Object?> toMap() => {'id': id, 'name': name, 'slug': slug};
 
   /// Create tag from database map
   static Tag fromMap(Map<String, Object?> map) => Tag(
@@ -206,37 +201,31 @@ class Tag {
   );
 
   /// Convert tag to API format
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'slug': slug,
-  };
+  Map<String, dynamic> toJson() => {'name': name, 'slug': slug};
 
   /// Create a slug from tag name
   static String createSlug(String name) {
     return name
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
-      .replaceAll(RegExp(r'\s+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^-|-$'), '');
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
   }
 
   /// Create tag from name (generates slug automatically)
-  static Tag fromName(String name) => Tag(
-    name: name,
-    slug: createSlug(name),
-  );
+  static Tag fromName(String name) => Tag(name: name, slug: createSlug(name));
 
   @override
   String toString() => 'Tag(name: $name, slug: $slug)';
 
   @override
   bool operator ==(Object other) =>
-    identical(this, other) ||
-    other is Tag &&
-    runtimeType == other.runtimeType &&
-    name == other.name &&
-    slug == other.slug;
+      identical(this, other) ||
+      other is Tag &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          slug == other.slug;
 
   @override
   int get hashCode => Object.hash(name, slug);

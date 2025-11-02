@@ -9,7 +9,7 @@ void main() {
     setUp(() async {
       // Initialize Flutter binding for tests
       TestWidgetsFlutterBinding.ensureInitialized();
-      
+
       // Clear SharedPreferences before each test
       SharedPreferences.setMockInitialValues({});
       SyncSettings.clearCache();
@@ -21,15 +21,13 @@ void main() {
       await Future.delayed(Duration.zero);
     });
 
-    testWidgets('should display settings page with App Preferences section', (WidgetTester tester) async {
+    testWidgets('should display settings page with App Preferences section', (
+      WidgetTester tester,
+    ) async {
       // Build the settings page with a larger screen size
       await tester.binding.setSurfaceSize(const Size(1200, 800));
-      
-      await tester.pumpWidget(
-        MaterialApp(
-          home: const SettingsPage(),
-        ),
-      );
+
+      await tester.pumpWidget(MaterialApp(home: const SettingsPage()));
 
       // Wait for the page to load
       await tester.pumpAndSettle();
@@ -38,15 +36,13 @@ void main() {
       expect(find.text('App Preferences'), findsOneWidget);
     });
 
-    testWidgets('should display API Configuration section', (WidgetTester tester) async {
+    testWidgets('should display API Configuration section', (
+      WidgetTester tester,
+    ) async {
       // Build the settings page with a larger screen size
       await tester.binding.setSurfaceSize(const Size(1200, 800));
-      
-      await tester.pumpWidget(
-        MaterialApp(
-          home: const SettingsPage(),
-        ),
-      );
+
+      await tester.pumpWidget(MaterialApp(home: const SettingsPage()));
 
       // Wait for the page to load
       await tester.pumpAndSettle();

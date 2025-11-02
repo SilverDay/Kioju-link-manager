@@ -14,7 +14,7 @@ void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
     // Set a larger screen size to prevent overflow issues
     await tester.binding.setSurfaceSize(const Size(1200, 800));
-    
+
     // Build our app and trigger a frame.
     await tester.pumpWidget(const KiojuApp());
 

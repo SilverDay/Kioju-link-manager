@@ -275,8 +275,10 @@ class _SettingsPageState extends State<SettingsPage> {
                             final scaffoldMessenger = ScaffoldMessenger.of(
                               context,
                             );
-                            final primaryColor = Theme.of(context).colorScheme.primary;
-                            final errorColor = Theme.of(context).colorScheme.error;
+                            final primaryColor =
+                                Theme.of(context).colorScheme.primary;
+                            final errorColor =
+                                Theme.of(context).colorScheme.error;
 
                             try {
                               setState(() {
@@ -621,7 +623,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     'https://kioju.de',
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Top Menu Buttons Explanation
                   Text(
                     'Top Menu Buttons',
@@ -631,7 +633,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
+
                   _buildHelpItem(
                     context,
                     Icons.add_link,

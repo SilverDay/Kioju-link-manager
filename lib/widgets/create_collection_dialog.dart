@@ -81,9 +81,9 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
               // Visibility
               Text(
                 'Visibility',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Column(
@@ -91,11 +91,14 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
                   CustomRadioTile<String>(
                     value: 'public',
                     groupValue: _visibility,
-                    onChanged: _isCreating ? null : (value) {
-                      setState(() {
-                        _visibility = value!;
-                      });
-                    },
+                    onChanged:
+                        _isCreating
+                            ? null
+                            : (value) {
+                              setState(() {
+                                _visibility = value!;
+                              });
+                            },
                     title: const Text('Public'),
                     subtitle: const Text('Visible to everyone'),
                     contentPadding: EdgeInsets.zero,
@@ -103,11 +106,14 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
                   CustomRadioTile<String>(
                     value: 'private',
                     groupValue: _visibility,
-                    onChanged: _isCreating ? null : (value) {
-                      setState(() {
-                        _visibility = value!;
-                      });
-                    },
+                    onChanged:
+                        _isCreating
+                            ? null
+                            : (value) {
+                              setState(() {
+                                _visibility = value!;
+                              });
+                            },
                     title: const Text('Private'),
                     subtitle: const Text('Only visible to you'),
                     contentPadding: EdgeInsets.zero,
@@ -115,11 +121,14 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
                   CustomRadioTile<String>(
                     value: 'hidden',
                     groupValue: _visibility,
-                    onChanged: _isCreating ? null : (value) {
-                      setState(() {
-                        _visibility = value!;
-                      });
-                    },
+                    onChanged:
+                        _isCreating
+                            ? null
+                            : (value) {
+                              setState(() {
+                                _visibility = value!;
+                              });
+                            },
                     title: const Text('Hidden'),
                     subtitle: const Text('Hidden from public listings'),
                     contentPadding: EdgeInsets.zero,
@@ -137,13 +146,14 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
         ),
         ElevatedButton(
           onPressed: _isCreating ? null : _createCollection,
-          child: _isCreating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Create Collection'),
+          child:
+              _isCreating
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Create Collection'),
         ),
       ],
     );
@@ -161,9 +171,10 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
     try {
       final result = {
         'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim().isEmpty 
-            ? null 
-            : _descriptionController.text.trim(),
+        'description':
+            _descriptionController.text.trim().isEmpty
+                ? null
+                : _descriptionController.text.trim(),
         'visibility': _visibility,
       };
 
@@ -175,7 +186,7 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
         setState(() {
           _isCreating = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to create collection: ${e.toString()}'),

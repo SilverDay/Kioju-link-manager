@@ -79,37 +79,43 @@ void main() {
     });
 
     group('SyncStrategyFactory', () {
-      test('should return ManualSyncStrategy when immediate sync is disabled', () async {
-        // Set to manual sync mode
-        await SyncSettings.setImmediateSyncEnabled(false);
-        
-        final strategy = await SyncStrategyFactory.getStrategy();
-        expect(strategy, isA<ManualSyncStrategy>());
-      });
+      test(
+        'should return ManualSyncStrategy when immediate sync is disabled',
+        () async {
+          // Set to manual sync mode
+          await SyncSettings.setImmediateSyncEnabled(false);
 
-      test('should return ImmediateSyncStrategy when immediate sync is enabled', () async {
-        // Set to immediate sync mode
-        await SyncSettings.setImmediateSyncEnabled(true);
-        
-        final strategy = await SyncStrategyFactory.getStrategy();
-        expect(strategy, isA<ImmediateSyncStrategy>());
-      });
+          final strategy = await SyncStrategyFactory.getStrategy();
+          expect(strategy, isA<ManualSyncStrategy>());
+        },
+      );
+
+      test(
+        'should return ImmediateSyncStrategy when immediate sync is enabled',
+        () async {
+          // Set to immediate sync mode
+          await SyncSettings.setImmediateSyncEnabled(true);
+
+          final strategy = await SyncStrategyFactory.getStrategy();
+          expect(strategy, isA<ImmediateSyncStrategy>());
+        },
+      );
 
       test('should use singleton pattern for strategy instances', () async {
         // Set to manual sync mode
         await SyncSettings.setImmediateSyncEnabled(false);
-        
+
         final strategy1 = await SyncStrategyFactory.getStrategy();
         final strategy2 = await SyncStrategyFactory.getStrategy();
         expect(identical(strategy1, strategy2), isTrue);
-        
+
         // Switch to immediate sync mode
         await SyncSettings.setImmediateSyncEnabled(true);
-        
+
         final strategy3 = await SyncStrategyFactory.getStrategy();
         final strategy4 = await SyncStrategyFactory.getStrategy();
         expect(identical(strategy3, strategy4), isTrue);
-        
+
         // Different strategy types should not be identical
         expect(identical(strategy1, strategy3), isFalse);
       });
@@ -118,10 +124,10 @@ void main() {
         // Get a strategy
         await SyncSettings.setImmediateSyncEnabled(false);
         final strategy1 = await SyncStrategyFactory.getStrategy();
-        
+
         // Clear cache
         SyncStrategyFactory.clearCache();
-        
+
         // Get strategy again - should be a new instance
         final strategy2 = await SyncStrategyFactory.getStrategy();
         expect(identical(strategy1, strategy2), isFalse);
@@ -150,64 +156,78 @@ void main() {
           title: 'Test Link',
           markAsSynced: (remoteId) async {},
         );
-        
+
         final result = await strategy.executeSync(operation);
-        
+
         expect(result.success, isTrue);
         expect(result.type, SyncResultType.manualQueued);
         expect(result.errorMessage, isNull);
       });
 
-      test('should mark link as dirty when processing link operation', () async {
-        // Create a test link
-        final linkId = await database.insert('links', {
-          'url': 'https://example.com',
-          'title': 'Test Link',
-          'is_dirty': 0,
-        });
+      test(
+        'should mark link as dirty when processing link operation',
+        () async {
+          // Create a test link
+          final linkId = await database.insert('links', {
+            'url': 'https://example.com',
+            'title': 'Test Link',
+            'is_dirty': 0,
+          });
 
-        // Create a real link operation
-        final operation = LinkCreateOperation(
-          localId: linkId,
-          url: 'https://example.com',
-          title: 'Test Link',
-          markAsSynced: (remoteId) async {},
-        );
-        
-        await strategy.executeSync(operation);
-        
-        // Verify link is marked as dirty
-        final links = await database.query('links', where: 'id = ?', whereArgs: [linkId]);
-        expect(links.length, 1);
-        expect(links.first['is_dirty'], 1);
-        expect(links.first['last_synced_at'], isNull);
-      });
+          // Create a real link operation
+          final operation = LinkCreateOperation(
+            localId: linkId,
+            url: 'https://example.com',
+            title: 'Test Link',
+            markAsSynced: (remoteId) async {},
+          );
 
-      test('should mark collection as dirty when processing collection operation', () async {
-        // Create a test collection
-        final collectionId = await database.insert('collections', {
-          'name': 'Test Collection',
-          'is_dirty': 0,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+          await strategy.executeSync(operation);
 
-        // Create a real collection operation
-        final operation = CollectionCreateOperation(
-          localId: collectionId,
-          name: 'Test Collection',
-          visibility: 'public',
-          markAsSynced: (remoteId) async {},
-        );
-        
-        await strategy.executeSync(operation);
-        
-        // Verify collection is marked as dirty
-        final collections = await database.query('collections', where: 'id = ?', whereArgs: [collectionId]);
-        expect(collections.length, 1);
-        expect(collections.first['is_dirty'], 1);
-        expect(collections.first['last_synced_at'], isNull);
-      });
+          // Verify link is marked as dirty
+          final links = await database.query(
+            'links',
+            where: 'id = ?',
+            whereArgs: [linkId],
+          );
+          expect(links.length, 1);
+          expect(links.first['is_dirty'], 1);
+          expect(links.first['last_synced_at'], isNull);
+        },
+      );
+
+      test(
+        'should mark collection as dirty when processing collection operation',
+        () async {
+          // Create a test collection
+          final collectionId = await database.insert('collections', {
+            'name': 'Test Collection',
+            'is_dirty': 0,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          // Create a real collection operation
+          final operation = CollectionCreateOperation(
+            localId: collectionId,
+            name: 'Test Collection',
+            visibility: 'public',
+            markAsSynced: (remoteId) async {},
+          );
+
+          await strategy.executeSync(operation);
+
+          // Verify collection is marked as dirty
+          final collections = await database.query(
+            'collections',
+            where: 'id = ?',
+            whereArgs: [collectionId],
+          );
+          expect(collections.length, 1);
+          expect(collections.first['is_dirty'], 1);
+          expect(collections.first['last_synced_at'], isNull);
+        },
+      );
 
       test('should handle bulk operations with progress tracking', () async {
         // Create test links
@@ -227,12 +247,17 @@ void main() {
         var lastTotal = 0;
 
         // Create bulk operation
-        final subOperations = linkIds.map((id) => LinkCreateOperation(
-          localId: id,
-          url: 'https://example$id.com',
-          title: 'Test Link $id',
-          markAsSynced: (remoteId) async {},
-        )).toList();
+        final subOperations =
+            linkIds
+                .map(
+                  (id) => LinkCreateOperation(
+                    localId: id,
+                    url: 'https://example$id.com',
+                    title: 'Test Link $id',
+                    markAsSynced: (remoteId) async {},
+                  ),
+                )
+                .toList();
         final bulkOperation = BulkOperation(
           operations: subOperations,
           onProgress: (completed, total) {
@@ -241,9 +266,9 @@ void main() {
             lastTotal = total;
           },
         );
-        
+
         final result = await strategy.executeSync(bulkOperation);
-        
+
         expect(result.success, isTrue);
         expect(result.type, SyncResultType.manualQueued);
         expect(progressCalls, greaterThan(0));
@@ -252,7 +277,11 @@ void main() {
 
         // Verify all links are marked as dirty
         for (final linkId in linkIds) {
-          final links = await database.query('links', where: 'id = ?', whereArgs: [linkId]);
+          final links = await database.query(
+            'links',
+            where: 'id = ?',
+            whereArgs: [linkId],
+          );
           expect(links.length, 1);
           expect(links.first['is_dirty'], 1);
         }
@@ -268,16 +297,16 @@ void main() {
 
       test('should return failure when no API token is configured', () async {
         // Ensure no token is set (this is the default in test environment)
-        
+
         final operation = LinkCreateOperation(
           localId: 1,
           url: 'https://example.com',
           title: 'Test Link',
           markAsSynced: (remoteId) async {},
         );
-        
+
         final result = await strategy.executeSync(operation);
-        
+
         expect(result.success, isFalse);
         expect(result.type, SyncResultType.immediateFailure);
         expect(result.errorMessage, contains('No API token configured'));
@@ -290,13 +319,13 @@ void main() {
           title: 'Test Link',
           markAsSynced: (remoteId) async {},
         );
-        
+
         // Create a cancelled token
         final cancelledToken = CancellationToken.cancelled('Test cancellation');
         strategy.setCancellationToken(cancelledToken);
-        
+
         final result = await strategy.executeSync(operation);
-        
+
         expect(result.success, isFalse);
         expect(result.type, SyncResultType.immediateFailure);
         expect(result.errorMessage, contains('cancelled'));
@@ -306,7 +335,7 @@ void main() {
     group('SyncResult', () {
       test('should create immediate success result', () {
         final result = SyncResult.immediateSuccess();
-        
+
         expect(result.success, isTrue);
         expect(result.type, SyncResultType.immediateSuccess);
         expect(result.errorMessage, isNull);
@@ -314,8 +343,11 @@ void main() {
       });
 
       test('should create immediate failure result', () {
-        final result = SyncResult.immediateFailure('Test error', ['item1', 'item2']);
-        
+        final result = SyncResult.immediateFailure('Test error', [
+          'item1',
+          'item2',
+        ]);
+
         expect(result.success, isFalse);
         expect(result.type, SyncResultType.immediateFailure);
         expect(result.errorMessage, 'Test error');
@@ -323,8 +355,10 @@ void main() {
       });
 
       test('should create immediate partial failure result', () {
-        final result = SyncResult.immediatePartialFailure('Partial error', ['item1']);
-        
+        final result = SyncResult.immediatePartialFailure('Partial error', [
+          'item1',
+        ]);
+
         expect(result.success, isFalse);
         expect(result.type, SyncResultType.immediatePartialFailure);
         expect(result.errorMessage, 'Partial error');
@@ -333,7 +367,7 @@ void main() {
 
       test('should create manual queued result', () {
         final result = SyncResult.manualQueued();
-        
+
         expect(result.success, isTrue);
         expect(result.type, SyncResultType.manualQueued);
         expect(result.errorMessage, isNull);
@@ -342,5 +376,3 @@ void main() {
     });
   });
 }
-
-

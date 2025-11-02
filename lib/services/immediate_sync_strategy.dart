@@ -11,7 +11,7 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
     try {
       // Check for cancellation before starting
       checkCancellation();
-      
+
       // Check if we have a valid API token
       if (!await KiojuApi.hasToken()) {
         return SyncResult.immediateFailure(
@@ -30,22 +30,20 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
           return SyncRetryService.shouldRetryError(error);
         },
       );
-      
+
       return SyncResult.immediateSuccess();
     } catch (e) {
       // Handle cancellation specifically
       if (e is OperationCancelledException) {
-        return SyncResult.immediateFailure(
-          'Sync cancelled: ${e.message}',
-          [operation.operationId],
-        );
+        return SyncResult.immediateFailure('Sync cancelled: ${e.message}', [
+          operation.operationId,
+        ]);
       }
-      
+
       // Return failure result - caller will handle marking as dirty
-      return SyncResult.immediateFailure(
-        'Sync failed: ${e.toString()}',
-        [operation.operationId],
-      );
+      return SyncResult.immediateFailure('Sync failed: ${e.toString()}', [
+        operation.operationId,
+      ]);
     }
   }
 
@@ -53,7 +51,7 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
   Future<void> _executeSyncOperation(SyncOperation operation) async {
     // Check for cancellation before each operation
     checkCancellation();
-    
+
     switch (operation.runtimeType.toString()) {
       case 'LinkCreateOperation':
         await _syncLinkCreate(operation as LinkCreateOperation);
@@ -83,13 +81,15 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
         await _syncImportOperation(operation as ImportOperation);
         break;
       default:
-        throw Exception('Unknown sync operation type: ${operation.runtimeType}');
+        throw Exception(
+          'Unknown sync operation type: ${operation.runtimeType}',
+        );
     }
   }
 
   Future<void> _syncLinkCreate(LinkCreateOperation operation) async {
     checkCancellation();
-    
+
     final response = await KiojuApi.addLink(
       url: operation.url,
       title: operation.title,
@@ -117,9 +117,10 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
           where: 'name = ?',
           whereArgs: [operation.collection],
         );
-        
+
         if (collectionRows.isNotEmpty) {
-          final collectionRemoteId = collectionRows.first['remote_id'] as String?;
+          final collectionRemoteId =
+              collectionRows.first['remote_id'] as String?;
           if (collectionRemoteId != null) {
             await KiojuApi.assignLinkToCollection(
               linkId: remoteId,
@@ -182,13 +183,15 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
         where: 'name = ?',
         whereArgs: [operation.toCollection],
       );
-      
+
       if (collectionRows.isNotEmpty) {
         collectionRemoteId = collectionRows.first['remote_id'] as String?;
       }
-      
+
       if (collectionRemoteId == null) {
-        throw Exception('Cannot move link: target collection not found or not synced');
+        throw Exception(
+          'Cannot move link: target collection not found or not synced',
+        );
       }
     }
 
@@ -206,7 +209,9 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
     await operation.markAsSynced();
   }
 
-  Future<void> _syncCollectionCreate(CollectionCreateOperation operation) async {
+  Future<void> _syncCollectionCreate(
+    CollectionCreateOperation operation,
+  ) async {
     final response = await KiojuApi.createCollection(
       name: operation.name,
       description: operation.description,
@@ -215,19 +220,23 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
     );
 
     if (response['success'] != true) {
-      throw Exception(response['message'] ?? 'Failed to create collection on server');
+      throw Exception(
+        response['message'] ?? 'Failed to create collection on server',
+      );
     }
 
     // Update local collection with remote ID
     final apiCollection = response['collection'];
     final remoteId = apiCollection['id']?.toString();
-    
+
     if (remoteId != null && operation.localId != null) {
       await operation.markAsSynced(remoteId);
     }
   }
 
-  Future<void> _syncCollectionUpdate(CollectionUpdateOperation operation) async {
+  Future<void> _syncCollectionUpdate(
+    CollectionUpdateOperation operation,
+  ) async {
     if (operation.remoteId == null) {
       throw Exception('Cannot update collection: no remote ID');
     }
@@ -241,7 +250,9 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
     );
 
     if (response['success'] != true) {
-      throw Exception(response['message'] ?? 'Failed to update collection on server');
+      throw Exception(
+        response['message'] ?? 'Failed to update collection on server',
+      );
     }
 
     // Mark as synced
@@ -250,7 +261,9 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
     }
   }
 
-  Future<void> _syncCollectionDelete(CollectionDeleteOperation operation) async {
+  Future<void> _syncCollectionDelete(
+    CollectionDeleteOperation operation,
+  ) async {
     if (operation.remoteId == null) {
       // Collection doesn't exist on server, nothing to delete
       return;
@@ -259,14 +272,16 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
     final response = await KiojuApi.deleteCollection(id: operation.remoteId!);
 
     if (response['success'] != true) {
-      throw Exception(response['message'] ?? 'Failed to delete collection on server');
+      throw Exception(
+        response['message'] ?? 'Failed to delete collection on server',
+      );
     }
   }
 
   Future<void> _syncBulkOperation(BulkOperation operation) async {
     final errors = <String>[];
     int completed = 0;
-    
+
     for (final subOperation in operation.operations) {
       try {
         checkCancellation(); // Check for cancellation before each sub-operation
@@ -278,18 +293,24 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
           // If cancelled, stop processing remaining operations
           rethrow;
         }
-        errors.add('${subOperation.operationType} (${subOperation.operationId}): ${e.toString()}');
+        errors.add(
+          '${subOperation.operationType} (${subOperation.operationId}): ${e.toString()}',
+        );
         // Continue with other operations even if one fails
       }
     }
-    
+
     if (errors.isNotEmpty) {
       // For bulk operations, we want to provide detailed error information
       // but still indicate partial success if some operations succeeded
       if (completed > 0) {
-        throw Exception('Bulk operation partially completed: $completed/${operation.operations.length} succeeded. Errors: ${errors.join('; ')}');
+        throw Exception(
+          'Bulk operation partially completed: $completed/${operation.operations.length} succeeded. Errors: ${errors.join('; ')}',
+        );
       } else {
-        throw Exception('Bulk operation failed completely. Errors: ${errors.join('; ')}');
+        throw Exception(
+          'Bulk operation failed completely. Errors: ${errors.join('; ')}',
+        );
       }
     }
   }
@@ -297,12 +318,12 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
   Future<void> _syncImportOperation(ImportOperation operation) async {
     final errors = <String>[];
     int completed = 0;
-    
+
     // Process each imported link
     for (final linkData in operation.importedLinks) {
       try {
         checkCancellation(); // Check for cancellation before each link
-        
+
         // Create link on server
         final response = await KiojuApi.addLink(
           url: linkData['url'] as String,
@@ -312,7 +333,9 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
         );
 
         if (response['success'] != true) {
-          throw Exception(response['message'] ?? 'Failed to create link on server');
+          throw Exception(
+            response['message'] ?? 'Failed to create link on server',
+          );
         }
 
         // Update local link with remote ID
@@ -339,9 +362,10 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
                 where: 'name = ?',
                 whereArgs: [linkData['collection']],
               );
-              
+
               if (collectionRows.isNotEmpty) {
-                final collectionRemoteId = collectionRows.first['remote_id'] as String?;
+                final collectionRemoteId =
+                    collectionRows.first['remote_id'] as String?;
                 if (collectionRemoteId != null) {
                   await KiojuApi.assignLinkToCollection(
                     linkId: remoteId,
@@ -360,17 +384,14 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
         operation.onProgress?.call(completed, operation.importedLinks.length);
       } catch (e) {
         errors.add('Link ${linkData['url']}: ${e.toString()}');
-        
+
         // Mark as dirty for later sync if immediate sync fails
         if (linkData['localId'] != null) {
           try {
             final db = await AppDb.instance();
             await db.update(
               'links',
-              {
-                'is_dirty': 1,
-                'last_synced_at': null,
-              },
+              {'is_dirty': 1, 'last_synced_at': null},
               where: 'id = ?',
               whereArgs: [linkData['localId']],
             );
@@ -380,14 +401,18 @@ class ImmediateSyncStrategy with CancellationSupport implements SyncStrategy {
         }
       }
     }
-    
+
     if (errors.isNotEmpty) {
       // For import operations, we want to provide detailed error information
       // but still indicate partial success if some operations succeeded
       if (completed > 0) {
-        throw Exception('Import partially completed: $completed/${operation.importedLinks.length} links synced. Errors: ${errors.join('; ')}');
+        throw Exception(
+          'Import partially completed: $completed/${operation.importedLinks.length} links synced. Errors: ${errors.join('; ')}',
+        );
       } else {
-        throw Exception('Import sync failed completely. Errors: ${errors.join('; ')}');
+        throw Exception(
+          'Import sync failed completely. Errors: ${errors.join('; ')}',
+        );
       }
     }
   }
@@ -417,7 +442,7 @@ class LinkCreateOperation extends SyncOperation {
 
   @override
   String get operationId => 'link_create_${localId ?? url.hashCode}';
-  
+
   @override
   String get operationType => 'LinkCreate';
 }
@@ -447,7 +472,7 @@ class LinkUpdateOperation extends SyncOperation {
 
   @override
   String get operationId => 'link_update_$localId';
-  
+
   @override
   String get operationType => 'LinkUpdate';
 }
@@ -465,7 +490,7 @@ class LinkDeleteOperation extends SyncOperation {
 
   @override
   String get operationId => 'link_delete_$localId';
-  
+
   @override
   String get operationType => 'LinkDelete';
 }
@@ -489,7 +514,7 @@ class LinkMoveOperation extends SyncOperation {
 
   @override
   String get operationId => 'link_move_$localId';
-  
+
   @override
   String get operationType => 'LinkMove';
 }
@@ -513,7 +538,7 @@ class CollectionCreateOperation extends SyncOperation {
 
   @override
   String get operationId => 'collection_create_${localId ?? name}';
-  
+
   @override
   String get operationType => 'CollectionCreate';
 }
@@ -539,7 +564,7 @@ class CollectionUpdateOperation extends SyncOperation {
 
   @override
   String get operationId => 'collection_update_${localId ?? remoteId}';
-  
+
   @override
   String get operationType => 'CollectionUpdate';
 }
@@ -549,15 +574,11 @@ class CollectionDeleteOperation extends SyncOperation {
   final String? remoteId;
   final String name;
 
-  CollectionDeleteOperation({
-    this.localId,
-    this.remoteId,
-    required this.name,
-  });
+  CollectionDeleteOperation({this.localId, this.remoteId, required this.name});
 
   @override
   String get operationId => 'collection_delete_${localId ?? remoteId}';
-  
+
   @override
   String get operationType => 'CollectionDelete';
 }
@@ -566,14 +587,11 @@ class BulkOperation extends SyncOperation {
   final List<SyncOperation> operations;
   final Function(int completed, int total)? onProgress;
 
-  BulkOperation({
-    required this.operations,
-    this.onProgress,
-  });
+  BulkOperation({required this.operations, this.onProgress});
 
   @override
   String get operationId => 'bulk_operation_${operations.length}_items';
-  
+
   @override
   String get operationType => 'BulkOperation';
 }
@@ -582,14 +600,11 @@ class ImportOperation extends SyncOperation {
   final List<Map<String, dynamic>> importedLinks;
   final Function(int completed, int total)? onProgress;
 
-  ImportOperation({
-    required this.importedLinks,
-    this.onProgress,
-  });
+  ImportOperation({required this.importedLinks, this.onProgress});
 
   @override
   String get operationId => 'import_operation_${importedLinks.length}_links';
-  
+
   @override
   String get operationType => 'ImportOperation';
 }

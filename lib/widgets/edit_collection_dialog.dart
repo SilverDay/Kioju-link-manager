@@ -5,10 +5,7 @@ import 'custom_radio_tile.dart';
 class EditCollectionDialog extends StatefulWidget {
   final Collection collection;
 
-  const EditCollectionDialog({
-    super.key,
-    required this.collection,
-  });
+  const EditCollectionDialog({super.key, required this.collection});
 
   @override
   State<EditCollectionDialog> createState() => _EditCollectionDialogState();
@@ -25,7 +22,9 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.collection.name);
-    _descriptionController = TextEditingController(text: widget.collection.description ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.collection.description ?? '',
+    );
     _visibility = widget.collection.visibility;
   }
 
@@ -111,9 +110,9 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
               // Visibility
               Text(
                 'Visibility',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Column(
@@ -121,11 +120,14 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
                   CustomRadioTile<String>(
                     value: 'public',
                     groupValue: _visibility,
-                    onChanged: _isUpdating ? null : (value) {
-                      setState(() {
-                        _visibility = value!;
-                      });
-                    },
+                    onChanged:
+                        _isUpdating
+                            ? null
+                            : (value) {
+                              setState(() {
+                                _visibility = value!;
+                              });
+                            },
                     title: const Text('Public'),
                     subtitle: const Text('Visible to everyone'),
                     contentPadding: EdgeInsets.zero,
@@ -133,11 +135,14 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
                   CustomRadioTile<String>(
                     value: 'private',
                     groupValue: _visibility,
-                    onChanged: _isUpdating ? null : (value) {
-                      setState(() {
-                        _visibility = value!;
-                      });
-                    },
+                    onChanged:
+                        _isUpdating
+                            ? null
+                            : (value) {
+                              setState(() {
+                                _visibility = value!;
+                              });
+                            },
                     title: const Text('Private'),
                     subtitle: const Text('Only visible to you'),
                     contentPadding: EdgeInsets.zero,
@@ -145,11 +150,14 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
                   CustomRadioTile<String>(
                     value: 'hidden',
                     groupValue: _visibility,
-                    onChanged: _isUpdating ? null : (value) {
-                      setState(() {
-                        _visibility = value!;
-                      });
-                    },
+                    onChanged:
+                        _isUpdating
+                            ? null
+                            : (value) {
+                              setState(() {
+                                _visibility = value!;
+                              });
+                            },
                     title: const Text('Hidden'),
                     subtitle: const Text('Hidden from public listings'),
                     contentPadding: EdgeInsets.zero,
@@ -196,7 +204,8 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
                           Icon(
                             Icons.calendar_today,
                             size: 16,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -211,22 +220,34 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
                       Wrap(
                         spacing: 4,
                         runSpacing: 4,
-                        children: widget.collection.tags.map(
-                          (tag) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.secondaryContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              tag.name,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Theme.of(context).colorScheme.onSecondaryContainer,
-                              ),
-                            ),
-                          ),
-                        ).toList(),
+                        children:
+                            widget.collection.tags
+                                .map(
+                                  (tag) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Theme.of(
+                                            context,
+                                          ).colorScheme.secondaryContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      tag.name,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.onSecondaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
                       ),
                     ],
                   ],
@@ -243,13 +264,14 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
         ),
         ElevatedButton(
           onPressed: _isUpdating ? null : _updateCollection,
-          child: _isUpdating
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Save Changes'),
+          child:
+              _isUpdating
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Save Changes'),
         ),
       ],
     );
@@ -290,9 +312,10 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
       final result = {
         'id': widget.collection.id!, // Use local database ID (int)
         'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim().isEmpty 
-            ? null 
-            : _descriptionController.text.trim(),
+        'description':
+            _descriptionController.text.trim().isEmpty
+                ? null
+                : _descriptionController.text.trim(),
         'visibility': _visibility,
       };
 
@@ -304,7 +327,7 @@ class _EditCollectionDialogState extends State<EditCollectionDialog> {
         setState(() {
           _isUpdating = false;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update collection: ${e.toString()}'),

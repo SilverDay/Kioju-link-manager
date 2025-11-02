@@ -92,9 +92,9 @@ class ImportSummaryDialog extends StatelessWidget {
                       (entry) => Padding(
                         padding: const EdgeInsets.only(left: 8, bottom: 2),
                         child: Text(
-                          entry.value.isEmpty 
-                            ? '• ${entry.key} → Uncategorized'
-                            : '• ${entry.key} → ${entry.value}',
+                          entry.value.isEmpty
+                              ? '• ${entry.key} → Uncategorized'
+                              : '• ${entry.key} → ${entry.value}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
@@ -126,10 +126,10 @@ class ImportSummaryDialog extends StatelessWidget {
                   Expanded(
                     child: Text(
                       syncResult?.isImmediateSync == true
-                        ? 'Your links have been imported and synced to the server. '
-                          'You can manage collections and move links between them using the folder view.'
-                        : 'Your links have been imported locally. '
-                          'Use the sync button to upload them to the server when ready.',
+                          ? 'Your links have been imported and synced to the server. '
+                              'You can manage collections and move links between them using the folder view.'
+                          : 'Your links have been imported locally. '
+                              'Use the sync button to upload them to the server when ready.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -150,12 +150,16 @@ class ImportSummaryDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSyncStatusSection(BuildContext context, ImportSyncResult syncResult) {
-    final statusColor = syncResult.isCompleteSuccess 
-      ? Colors.green 
-      : syncResult.hasPartialFailures 
-        ? Colors.orange 
-        : Colors.red;
+  Widget _buildSyncStatusSection(
+    BuildContext context,
+    ImportSyncResult syncResult,
+  ) {
+    final statusColor =
+        syncResult.isCompleteSuccess
+            ? Colors.green
+            : syncResult.hasPartialFailures
+            ? Colors.orange
+            : Colors.red;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,9 +175,9 @@ class ImportSummaryDialog extends StatelessWidget {
             Expanded(
               child: Text(
                 syncResult.isImmediateSync ? 'Sync Status' : 'Save Status',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -184,9 +188,7 @@ class ImportSummaryDialog extends StatelessWidget {
           decoration: BoxDecoration(
             color: statusColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: statusColor.withValues(alpha: 0.3),
-            ),
+            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,22 +251,21 @@ class ImportSummaryDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSyncStat(BuildContext context, String label, String value, Color color) {
+  Widget _buildSyncStat(
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) {
     return Row(
       children: [
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
-        Text(
-          '$label: $value',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text('$label: $value', style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
@@ -281,10 +282,7 @@ class ImportSummaryDialog extends StatelessWidget {
         Icon(icon, size: 20, color: color),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

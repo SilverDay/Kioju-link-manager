@@ -24,7 +24,9 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
     super.initState();
     for (final collection in widget.conflictingCollections) {
       _resolutions[collection] = 'merge'; // Default to merge
-      _controllers[collection] = TextEditingController(text: '${collection}_imported');
+      _controllers[collection] = TextEditingController(
+        text: '${collection}_imported',
+      );
     }
   }
 
@@ -66,9 +68,8 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
                         children: [
                           Text(
                             collection,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           CustomRadioTile<String>(
@@ -80,7 +81,9 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
                               });
                             },
                             title: const Text('Merge with existing collection'),
-                            subtitle: const Text('Add imported links to the existing collection'),
+                            subtitle: const Text(
+                              'Add imported links to the existing collection',
+                            ),
                             dense: true,
                           ),
                           CustomRadioTile<String>(
@@ -92,7 +95,9 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
                               });
                             },
                             title: const Text('Create with new name'),
-                            subtitle: const Text('Create a new collection with a different name'),
+                            subtitle: const Text(
+                              'Create a new collection with a different name',
+                            ),
                             dense: true,
                           ),
                           if (_resolutions[collection] == 'rename') ...[
@@ -118,7 +123,9 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
                               });
                             },
                             title: const Text('Skip collection'),
-                            subtitle: const Text('Import links without assigning to any collection'),
+                            subtitle: const Text(
+                              'Import links without assigning to any collection',
+                            ),
                             dense: true,
                           ),
                         ],
@@ -146,10 +153,10 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
 
   void _handleResolve() {
     final resolutions = <String, String>{};
-    
+
     for (final collection in widget.conflictingCollections) {
       final resolution = _resolutions[collection]!;
-      
+
       if (resolution == 'merge') {
         // Keep original name to merge with existing
         resolutions[collection] = collection;
@@ -171,7 +178,7 @@ class _ImportConflictDialogState extends State<ImportConflictDialog> {
         resolutions[collection] = '';
       }
     }
-    
+
     Navigator.of(context).pop();
     widget.onResolved(resolutions);
   }

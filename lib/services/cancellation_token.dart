@@ -3,9 +3,9 @@ import 'dart:async';
 /// Exception thrown when an operation is cancelled
 class OperationCancelledException implements Exception {
   final String message;
-  
+
   const OperationCancelledException([this.message = 'Operation was cancelled']);
-  
+
   @override
   String toString() => 'OperationCancelledException: $message';
 }
@@ -58,7 +58,7 @@ class CancellationToken {
   /// Creates a new token that will be cancelled when any of the provided tokens are cancelled
   static CancellationToken any(List<CancellationToken> tokens) {
     final combinedToken = CancellationToken();
-    
+
     for (final token in tokens) {
       if (token.isCancelled) {
         combinedToken._cancel(token.reason);
@@ -71,7 +71,7 @@ class CancellationToken {
         });
       }
     }
-    
+
     return combinedToken;
   }
 
@@ -105,19 +105,21 @@ mixin CancellationSupport {
   /// Executes an async operation with cancellation support
   Future<T> executeWithCancellation<T>(Future<T> Function() operation) async {
     checkCancellation();
-    
+
     if (_cancellationToken == null) {
       return await operation();
     }
-    
+
     // Race between the operation and cancellation
     final result = await Future.any([
       operation(),
       _cancellationToken!.cancelled.then<T>((_) {
-        throw OperationCancelledException(_cancellationToken!.reason ?? 'Operation cancelled');
+        throw OperationCancelledException(
+          _cancellationToken!.reason ?? 'Operation cancelled',
+        );
       }),
     ]);
-    
+
     return result;
   }
 }

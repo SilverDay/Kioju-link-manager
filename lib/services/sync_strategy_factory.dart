@@ -13,7 +13,7 @@ class SyncStrategyFactory {
   /// Gets the appropriate sync strategy based on current user preference
   static Future<SyncStrategy> getStrategy() async {
     final isImmediateSync = await SyncSettings.isImmediateSyncEnabled();
-    
+
     if (isImmediateSync) {
       // Use singleton pattern to avoid creating multiple instances
       _immediateSyncStrategy ??= ImmediateSyncStrategy();
@@ -32,7 +32,7 @@ class SyncStrategyFactory {
   }
 
   /// Executes a sync operation in the background with performance optimizations
-  /// 
+  ///
   /// [operation] - The sync operation to execute
   /// [cancellationToken] - Optional cancellation token
   /// [onProgress] - Optional progress callback
@@ -46,17 +46,18 @@ class SyncStrategyFactory {
     bool? useBackground,
   }) async {
     final strategy = await getStrategy();
-    
+
     // Determine if we should use background execution
-    final shouldUseBackground = useBackground ?? 
+    final shouldUseBackground =
+        useBackground ??
         (operation is BulkOperation || operation is ImportOperation);
-    
+
     if (shouldUseBackground) {
       // Set cancellation token on strategy if it supports it
       if (strategy is ImmediateSyncStrategy) {
         strategy.setCancellationToken(cancellationToken);
       }
-      
+
       return await BackgroundSyncExecutor.executeInBackground(
         operation,
         strategy,
@@ -82,7 +83,7 @@ class SyncStrategyFactory {
     bool enableRetry = true,
   }) async {
     final strategy = await getStrategy();
-    
+
     return await BackgroundSyncExecutor.executeBulkInBackground(
       operations,
       strategy,

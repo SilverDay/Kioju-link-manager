@@ -4,10 +4,10 @@ import 'dart:async';
 /// Service for managing sync preferences and settings
 class SyncSettings {
   static const String _immediateSyncKey = 'immediate_sync_enabled';
-  
+
   // Cache to avoid repeated storage calls
   static bool? _cachedImmediateSyncEnabled;
-  
+
   // Cache expiry timer to refresh cache periodically
   static Timer? _cacheExpiryTimer;
   static const Duration _cacheExpiryDuration = Duration(minutes: 5);
@@ -24,10 +24,10 @@ class SyncSettings {
       final prefs = await SharedPreferences.getInstance();
       // Default to manual sync mode for new installations
       _cachedImmediateSyncEnabled = prefs.getBool(_immediateSyncKey) ?? false;
-      
+
       // Set cache expiry timer
       _resetCacheExpiryTimer();
-      
+
       return _cachedImmediateSyncEnabled!;
     } catch (e) {
       // Default to manual sync on error

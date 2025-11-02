@@ -13,9 +13,11 @@ class CollectionTreeWidget extends StatefulWidget {
   final Function(Collection) onCollectionEdit;
   final Function(Collection) onCollectionDelete;
   final Function() onCreateCollection;
-  final Function(LinkItem, String?) onLinkMoved; // null collection means uncategorized
+  final Function(LinkItem, String?)
+  onLinkMoved; // null collection means uncategorized
   final bool isLoading;
-  final Function(List<LinkItem>)? onBulkOperation; // New callback for bulk operations
+  final Function(List<LinkItem>)?
+  onBulkOperation; // New callback for bulk operations
 
   const CollectionTreeWidget({
     super.key,
@@ -38,19 +40,23 @@ class CollectionTreeWidget extends StatefulWidget {
 }
 
 // Global key to access the collection tree widget state
-final GlobalKey<CollectionTreeWidgetState> collectionTreeKey = GlobalKey<CollectionTreeWidgetState>();
+final GlobalKey<CollectionTreeWidgetState> collectionTreeKey =
+    GlobalKey<CollectionTreeWidgetState>();
 
 class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
   final Set<String> _expandedCollections = <String>{};
   final CollectionService _collectionService = CollectionService.instance;
   final Map<String, List<LinkItem>> _collectionLinks = {};
   final Map<String, bool> _loadingCollections = {};
-  final Map<String, bool> _hasMoreLinks = {}; // Track if collection has more links to load
-  final Map<String, int> _loadedPages = {}; // Track how many pages loaded per collection
+  final Map<String, bool> _hasMoreLinks =
+      {}; // Track if collection has more links to load
+  final Map<String, int> _loadedPages =
+      {}; // Track how many pages loaded per collection
   final Set<int> _selectedLinkIds = <int>{}; // Track selected links
   bool _isMultiSelectMode = false;
-  final int _uncategorizedLinksShown = 50; // Show limited uncategorized links initially
-  
+  final int _uncategorizedLinksShown =
+      50; // Show limited uncategorized links initially
+
   static const int _linksPerPage = 50; // Load links in batches
 
   @override
@@ -78,7 +84,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
         }
         final newCollection = widget.collections[i];
         final oldCollection = oldWidget.collections[i];
-        
+
         // Check if link count or other key properties changed
         if (newCollection.linkCount != oldCollection.linkCount ||
             newCollection.name != oldCollection.name ||
@@ -87,7 +93,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
           break;
         }
       }
-      
+
       // If collections data changed, clear the cache to force reload
       if (collectionsChanged) {
         _collectionLinks.clear();
@@ -101,9 +107,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
   @override
   Widget build(BuildContext context) {
     if (widget.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Stack(
@@ -114,11 +118,14 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
             if (_isMultiSelectMode)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: _buildMultiSelectToolbar(),
                 ),
               ),
-            
+
             // Collections as folders (optimized for large lists)
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -129,7 +136,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
                 },
               ),
             ),
-            
+
             // Uncategorized links section
             SliverToBoxAdapter(
               child: Padding(
@@ -145,7 +152,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
             ),
           ],
         ),
-        
+
         // Floating bulk operations toolbar
         if (_isMultiSelectMode && _selectedLinkIds.isNotEmpty)
           Positioned(
@@ -179,14 +186,20 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
             return Container(
               margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
-                color: isDragOver
-                    ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                color:
+                    isDragOver
+                        ? Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isDragOver
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  color:
+                      isDragOver
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(
+                            context,
+                          ).colorScheme.outline.withValues(alpha: 0.2),
                   width: isDragOver ? 2 : 1,
                 ),
               ),
@@ -206,9 +219,8 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
                       Expanded(
                         child: Text(
                           collection.name,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
                       Text(
@@ -222,25 +234,34 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                           size: 20,
                         ),
-                        onSelected: (value) => _handleCollectionAction(value, collection),
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: ListTile(
-                              leading: Icon(Icons.edit),
-                              title: Text('Edit Collection'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: ListTile(
-                              leading: Icon(Icons.delete, color: Colors.red),
-                              title: Text('Delete Collection', style: TextStyle(color: Colors.red)),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ],
+                        onSelected:
+                            (value) =>
+                                _handleCollectionAction(value, collection),
+                        itemBuilder:
+                            (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: ListTile(
+                                  leading: Icon(Icons.edit),
+                                  title: Text('Edit Collection'),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                  ),
+                                  title: Text(
+                                    'Delete Collection',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ],
                       ),
                       const SizedBox(width: 8),
                       Icon(
@@ -254,16 +275,14 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
             );
           },
         ),
-        
+
         // Collection links (when expanded)
         if (isExpanded) ...[
           if (isLoading)
             Container(
               margin: const EdgeInsets.only(left: 32, bottom: 8),
               padding: const EdgeInsets.all(16),
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: const Center(child: CircularProgressIndicator()),
             )
           else if (links.isEmpty)
             Container(
@@ -271,24 +290,30 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 'No links in this collection',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontStyle: FontStyle.italic,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
               ),
             )
           else
-            ...links.map((link) => Container(
-              margin: const EdgeInsets.only(left: 32, bottom: 8),
-              child: _buildLinkItem(link, collectionId: collectionId),
-            )),
+            ...links.map(
+              (link) => Container(
+                margin: const EdgeInsets.only(left: 32, bottom: 8),
+                child: _buildLinkItem(link, collectionId: collectionId),
+              ),
+            ),
         ],
       ],
     );
   }
 
-  Widget _buildLinkItem(LinkItem link, {String? collectionId, bool isUncategorized = false}) {
+  Widget _buildLinkItem(
+    LinkItem link, {
+    String? collectionId,
+    bool isUncategorized = false,
+  }) {
     final isSelected = _selectedLinkIds.contains(link.id);
-    
+
     return Draggable<LinkItem>(
       data: link,
       feedback: Material(
@@ -319,29 +344,38 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
     );
   }
 
-  Widget _buildLinkCard(LinkItem link, bool isSelected, String? collectionId, bool isUncategorized) {
+  Widget _buildLinkCard(
+    LinkItem link,
+    bool isSelected,
+    String? collectionId,
+    bool isUncategorized,
+  ) {
     return Card(
-      color: isSelected 
-          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
-          : null,
+      color:
+          isSelected
+              ? Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+              : null,
       child: ListTile(
-        leading: _isMultiSelectMode
-            ? Checkbox(
-                value: isSelected,
-                onChanged: (value) {
-                  setState(() {
-                    if (value == true) {
-                      _selectedLinkIds.add(link.id!);
-                    } else {
-                      _selectedLinkIds.remove(link.id!);
-                    }
-                  });
-                },
-              )
-            : Icon(
-                Icons.link,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+        leading:
+            _isMultiSelectMode
+                ? Checkbox(
+                  value: isSelected,
+                  onChanged: (value) {
+                    setState(() {
+                      if (value == true) {
+                        _selectedLinkIds.add(link.id!);
+                      } else {
+                        _selectedLinkIds.remove(link.id!);
+                      }
+                    });
+                  },
+                )
+                : Icon(
+                  Icons.link,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
         title: Text(
           link.title ?? 'Untitled Link',
           maxLines: 1,
@@ -355,17 +389,18 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
-        onTap: _isMultiSelectMode
-            ? () {
-                setState(() {
-                  if (isSelected) {
-                    _selectedLinkIds.remove(link.id!);
-                  } else {
-                    _selectedLinkIds.add(link.id!);
-                  }
-                });
-              }
-            : () => widget.onLinkTap(link),
+        onTap:
+            _isMultiSelectMode
+                ? () {
+                  setState(() {
+                    if (isSelected) {
+                      _selectedLinkIds.remove(link.id!);
+                    } else {
+                      _selectedLinkIds.add(link.id!);
+                    }
+                  });
+                }
+                : () => widget.onLinkTap(link),
         onLongPress: () {
           if (!_isMultiSelectMode) {
             setState(() {
@@ -374,58 +409,63 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
             });
           }
         },
-        trailing: _isMultiSelectMode
-            ? null
-            : PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+        trailing:
+            _isMultiSelectMode
+                ? null
+                : PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  onSelected: (value) => _handleLinkAction(value, link),
+                  itemBuilder:
+                      (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            leading: Icon(Icons.edit),
+                            title: Text('Edit'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'copy',
+                          child: ListTile(
+                            leading: Icon(Icons.copy),
+                            title: Text('Copy URL'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'move',
+                          child: ListTile(
+                            leading: Icon(Icons.drive_file_move),
+                            title: Text('Move to Collection'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        if (!isUncategorized)
+                          const PopupMenuItem(
+                            value: 'uncategorize',
+                            child: ListTile(
+                              leading: Icon(Icons.remove_circle_outline),
+                              title: Text('Remove from Collection'),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            leading: Icon(Icons.delete, color: Colors.red),
+                            title: Text(
+                              'Delete',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
                 ),
-                onSelected: (value) => _handleLinkAction(value, link),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: ListTile(
-                      leading: Icon(Icons.edit),
-                      title: Text('Edit'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'copy',
-                    child: ListTile(
-                      leading: Icon(Icons.copy),
-                      title: Text('Copy URL'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'move',
-                    child: ListTile(
-                      leading: Icon(Icons.drive_file_move),
-                      title: Text('Move to Collection'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  if (!isUncategorized)
-                    const PopupMenuItem(
-                      value: 'uncategorize',
-                      child: ListTile(
-                        leading: Icon(Icons.remove_circle_outline),
-                        title: Text('Remove from Collection'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: ListTile(
-                      leading: Icon(Icons.delete, color: Colors.red),
-                      title: Text('Delete', style: TextStyle(color: Colors.red)),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
-              ),
       ),
     );
   }
@@ -440,16 +480,19 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
         final isDragOver = candidateData.isNotEmpty;
         return Container(
           padding: const EdgeInsets.all(16),
-          decoration: isDragOver
-              ? BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 2,
-                  ),
-                )
-              : null,
+          decoration:
+              isDragOver
+                  ? BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
+                  )
+                  : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -473,7 +516,9 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Theme.of(context).colorScheme.primary,
@@ -490,20 +535,20 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
                     ),
                   ),
                 ),
-              ...widget.uncategorizedLinks.take(_uncategorizedLinksShown).map(
-                (link) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: _buildLinkItem(link, isUncategorized: true),
-                ),
-              ),
+              ...widget.uncategorizedLinks
+                  .take(_uncategorizedLinksShown)
+                  .map(
+                    (link) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: _buildLinkItem(link, isUncategorized: true),
+                    ),
+                  ),
             ],
           ),
         );
       },
     );
   }
-
-
 
   Widget _buildMultiSelectToolbar() {
     return Container(
@@ -520,10 +565,11 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
           ),
           const Spacer(),
           TextButton(
-            onPressed: () => setState(() {
-              _selectedLinkIds.clear();
-              _isMultiSelectMode = false;
-            }),
+            onPressed:
+                () => setState(() {
+                  _selectedLinkIds.clear();
+                  _isMultiSelectMode = false;
+                }),
             child: const Text('Clear'),
           ),
         ],
@@ -550,9 +596,9 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
           Expanded(
             child: Text(
               '${_selectedLinkIds.length} links selected',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 16),
@@ -584,7 +630,10 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
     });
   }
 
-  Future<void> _loadCollectionLinks(String collectionId, {bool loadMore = false}) async {
+  Future<void> _loadCollectionLinks(
+    String collectionId, {
+    bool loadMore = false,
+  }) async {
     if (_loadingCollections[collectionId] == true) return;
 
     setState(() {
@@ -594,19 +643,19 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
     try {
       final currentPage = _loadedPages[collectionId] ?? 0;
       final offset = loadMore ? currentPage * _linksPerPage : 0;
-      
+
       // Find the collection by ID to get its name
       final collection = widget.collections.firstWhere(
         (c) => (c.remoteId ?? 'local_${c.id}') == collectionId,
       );
-      
+
       // Get links with pagination using collection name
       final links = await _collectionService.getCollectionLinks(
-        collection.name, 
+        collection.name,
         limit: _linksPerPage,
         offset: offset,
       );
-      
+
       setState(() {
         if (loadMore && _collectionLinks.containsKey(collectionId)) {
           // Append to existing links
@@ -615,7 +664,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
           // Replace existing links
           _collectionLinks[collectionId] = links;
         }
-        
+
         // Update pagination state
         _hasMoreLinks[collectionId] = links.length == _linksPerPage;
         _loadedPages[collectionId] = loadMore ? currentPage + 1 : 1;
@@ -662,44 +711,47 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
   void _showMoveToCollectionDialog(LinkItem link) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Move to Collection'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.folder_open),
-              title: const Text('Uncategorized'),
-              onTap: () {
-                Navigator.of(context).pop();
-                widget.onLinkMoved(link, null);
-              },
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Move to Collection'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.folder_open),
+                  title: const Text('Uncategorized'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    widget.onLinkMoved(link, null);
+                  },
+                ),
+                const Divider(),
+                ...widget.collections.map(
+                  (collection) => ListTile(
+                    leading: const Icon(Icons.folder),
+                    title: Text(collection.name),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      widget.onLinkMoved(link, collection.name);
+                    },
+                  ),
+                ),
+              ],
             ),
-            const Divider(),
-            ...widget.collections.map((collection) => ListTile(
-              leading: const Icon(Icons.folder),
-              title: Text(collection.name),
-              onTap: () {
-                Navigator.of(context).pop();
-                widget.onLinkMoved(link, collection.name);
-              },
-            )),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
   /// Clear cache for a specific collection and reload its links if expanded
   void refreshCollection(Collection collection) {
     final collectionKey = collection.remoteId ?? 'local_${collection.id}';
-    
+
     // Clear cache for this collection
     setState(() {
       _collectionLinks.remove(collectionKey);
@@ -707,7 +759,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
       _hasMoreLinks.remove(collectionKey);
       _loadedPages.remove(collectionKey);
     });
-    
+
     // If the collection is currently expanded, reload its links immediately
     if (_expandedCollections.contains(collectionKey)) {
       _loadCollectionLinks(collectionKey);
@@ -726,16 +778,22 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
 
   List<LinkItem> _getSelectedLinks() {
     final selectedLinks = <LinkItem>[];
-    
+
     // Get selected links from collections
     for (final collection in widget.collections) {
       final links = _collectionLinks[collection.id.toString()] ?? [];
-      selectedLinks.addAll(links.where((link) => _selectedLinkIds.contains(link.id)));
+      selectedLinks.addAll(
+        links.where((link) => _selectedLinkIds.contains(link.id)),
+      );
     }
-    
+
     // Get selected uncategorized links
-    selectedLinks.addAll(widget.uncategorizedLinks.where((link) => _selectedLinkIds.contains(link.id)));
-    
+    selectedLinks.addAll(
+      widget.uncategorizedLinks.where(
+        (link) => _selectedLinkIds.contains(link.id),
+      ),
+    );
+
     return selectedLinks;
   }
 }

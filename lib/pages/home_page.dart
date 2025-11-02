@@ -1660,14 +1660,14 @@ class _HomePageState extends State<HomePage> {
         icon: const Icon(Icons.add_link),
         tooltip: 'New Link',
       ),
-      
+
       // New Collection (Folder with +)
       IconButton(
         onPressed: isAnyOperationRunning ? null : _createCollection,
         icon: const Icon(Icons.create_new_folder),
         tooltip: 'New Collection',
       ),
-      
+
       // Spacer
       const SizedBox(width: 8),
       Container(
@@ -1676,7 +1676,7 @@ class _HomePageState extends State<HomePage> {
         color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
       ),
       const SizedBox(width: 8),
-      
+
       // Sync Down
       IconButton(
         onPressed: (_isSyncing || isAnyOperationRunning) ? null : _pull,
@@ -1690,7 +1690,7 @@ class _HomePageState extends State<HomePage> {
                 : const Icon(Icons.cloud_download),
         tooltip: _isSyncing ? 'Syncing...' : 'Sync Down',
       ),
-      
+
       // Sync Up
       IconButton(
         onPressed: (_isSyncing || isAnyOperationRunning) ? null : _push,
@@ -1704,7 +1704,7 @@ class _HomePageState extends State<HomePage> {
                 : const Icon(Icons.cloud_upload),
         tooltip: _isSyncing ? 'Syncing...' : 'Sync Up',
       ),
-      
+
       // Spacer
       const SizedBox(width: 8),
       Container(
@@ -1713,7 +1713,7 @@ class _HomePageState extends State<HomePage> {
         color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
       ),
       const SizedBox(width: 8),
-      
+
       // Import from Browser (better icon)
       IconButton(
         onPressed: (_isImporting || isAnyOperationRunning) ? null : _import,
@@ -1727,7 +1727,7 @@ class _HomePageState extends State<HomePage> {
                 : const Icon(Icons.file_download),
         tooltip: _isImporting ? 'Importing...' : 'Import from Browser',
       ),
-      
+
       // Export to Browser (better icon)
       IconButton(
         onPressed: (_isExporting || isAnyOperationRunning) ? null : _export,
@@ -1741,7 +1741,7 @@ class _HomePageState extends State<HomePage> {
                 : const Icon(Icons.file_upload),
         tooltip: _isExporting ? 'Exporting...' : 'Export to Browser',
       ),
-      
+
       // Spacer
       const SizedBox(width: 8),
       Container(
@@ -1750,7 +1750,7 @@ class _HomePageState extends State<HomePage> {
         color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
       ),
       const SizedBox(width: 8),
-      
+
       // Settings
       IconButton(
         onPressed:

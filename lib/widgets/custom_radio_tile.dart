@@ -24,11 +24,13 @@ class CustomRadioTile<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSelected = value == groupValue;
-    
+
     return InkWell(
       onTap: onChanged != null ? () => onChanged!(value) : null,
       child: Padding(
-        padding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        padding:
+            contentPadding ??
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Row(
           children: [
             // Custom radio button using Container and decoration
@@ -38,22 +40,25 @@ class CustomRadioTile<T> extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: isSelected 
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline,
+                  color:
+                      isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outline,
                   width: 2,
                 ),
-                color: isSelected 
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.transparent,
+                color:
+                    isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
               ),
-              child: isSelected
-                ? Icon(
-                    Icons.circle,
-                    size: 10,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  )
-                : null,
+              child:
+                  isSelected
+                      ? Icon(
+                        Icons.circle,
+                        size: 10,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      )
+                      : null,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -61,7 +66,7 @@ class CustomRadioTile<T> extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (title != null) 
+                  if (title != null)
                     DefaultTextStyle(
                       style: Theme.of(context).textTheme.bodyLarge!,
                       child: title!,

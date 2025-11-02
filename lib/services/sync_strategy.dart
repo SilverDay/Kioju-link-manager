@@ -21,7 +21,10 @@ class SyncResult {
   }
 
   /// Creates a failed immediate sync result
-  factory SyncResult.immediateFailure(String errorMessage, [List<String>? failedIds]) {
+  factory SyncResult.immediateFailure(
+    String errorMessage, [
+    List<String>? failedIds,
+  ]) {
     return SyncResult(
       success: false,
       errorMessage: errorMessage,
@@ -31,7 +34,10 @@ class SyncResult {
   }
 
   /// Creates a partial failure immediate sync result
-  factory SyncResult.immediatePartialFailure(String errorMessage, List<String> failedIds) {
+  factory SyncResult.immediatePartialFailure(
+    String errorMessage,
+    List<String> failedIds,
+  ) {
     return SyncResult(
       success: false,
       errorMessage: errorMessage,
@@ -42,10 +48,7 @@ class SyncResult {
 
   /// Creates a manual sync queued result
   factory SyncResult.manualQueued() {
-    return const SyncResult(
-      success: true,
-      type: SyncResultType.manualQueued,
-    );
+    return const SyncResult(success: true, type: SyncResultType.manualQueued);
   }
 }
 
@@ -61,7 +64,7 @@ enum SyncResultType {
 abstract class SyncOperation {
   /// Unique identifier for the operation
   String get operationId;
-  
+
   /// Type of operation for logging/debugging
   String get operationType;
 }

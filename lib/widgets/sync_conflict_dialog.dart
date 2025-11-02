@@ -15,10 +15,7 @@ class SyncConflictDialog extends StatelessWidget {
     return AlertDialog(
       title: Row(
         children: [
-          Icon(
-            Icons.sync_problem,
-            color: Theme.of(context).colorScheme.error,
-          ),
+          Icon(Icons.sync_problem, color: Theme.of(context).colorScheme.error),
           const SizedBox(width: 12),
           const Text('Sync Conflict Warning'),
         ],
@@ -36,7 +33,9 @@ class SyncConflictDialog extends StatelessWidget {
                 color: Theme.of(context).colorScheme.errorContainer,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.error.withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
@@ -54,7 +53,8 @@ class SyncConflictDialog extends StatelessWidget {
                         Text(
                           'You have unsynced local changes',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onErrorContainer,
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -63,7 +63,8 @@ class SyncConflictDialog extends StatelessWidget {
                           'Syncing down from the server may overwrite your local modifications. '
                           'We recommend syncing up your changes first to avoid data loss.',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onErrorContainer,
+                            color:
+                                Theme.of(context).colorScheme.onErrorContainer,
                           ),
                         ),
                       ],
@@ -91,7 +92,7 @@ class SyncConflictDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
+
                   if (unsyncedCollections > 0) ...[
                     Row(
                       children: [
@@ -103,15 +104,14 @@ class SyncConflictDialog extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           '$unsyncedCollections collection${unsyncedCollections == 1 ? '' : 's'} modified',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                   ],
-                  
+
                   if (unsyncedLinks > 0) ...[
                     Row(
                       children: [
@@ -123,9 +123,8 @@ class SyncConflictDialog extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           '$unsyncedLinks link${unsyncedLinks == 1 ? '' : 's'} modified',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -138,30 +137,32 @@ class SyncConflictDialog extends StatelessWidget {
             // Explanation of options
             Text(
               'What would you like to do?',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
-            
+
             _buildOptionCard(
               context,
               icon: Icons.cloud_upload,
               iconColor: Colors.green,
               title: 'Sync Up First (Recommended)',
-              description: 'Upload your local changes to the server, then sync down safely',
+              description:
+                  'Upload your local changes to the server, then sync down safely',
             ),
             const SizedBox(height: 8),
-            
+
             _buildOptionCard(
               context,
               icon: Icons.cloud_download,
               iconColor: Colors.orange,
               title: 'Continue Anyway',
-              description: 'Download server changes and potentially lose local modifications',
+              description:
+                  'Download server changes and potentially lose local modifications',
             ),
             const SizedBox(height: 8),
-            
+
             _buildOptionCard(
               context,
               icon: Icons.cancel,
@@ -179,9 +180,7 @@ class SyncConflictDialog extends StatelessWidget {
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop('continue'),
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.orange,
-          ),
+          style: TextButton.styleFrom(foregroundColor: Colors.orange),
           child: const Text('Continue Anyway'),
         ),
         ElevatedButton.icon(
@@ -221,11 +220,7 @@ class SyncConflictDialog extends StatelessWidget {
               color: iconColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 20,
-            ),
+            child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -234,9 +229,9 @@ class SyncConflictDialog extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -262,9 +257,10 @@ Future<String?> showSyncConflictDialog(
   return showDialog<String>(
     context: context,
     barrierDismissible: false, // Force user to make a choice
-    builder: (context) => SyncConflictDialog(
-      unsyncedCollections: unsyncedCollections,
-      unsyncedLinks: unsyncedLinks,
-    ),
+    builder:
+        (context) => SyncConflictDialog(
+          unsyncedCollections: unsyncedCollections,
+          unsyncedLinks: unsyncedLinks,
+        ),
   );
 }

@@ -23,7 +23,6 @@ class BulkOperationsDialog extends StatefulWidget {
 }
 
 class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
-
   final LinkService _linkService = LinkService.instance;
   bool _isProcessing = false;
   String? _selectedOperation;
@@ -63,7 +62,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            
+
             // Operation selection
             CustomRadioTile<String>(
               value: 'move',
@@ -74,9 +73,11 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                 });
               },
               title: const Text('Move to Collection'),
-              subtitle: const Text('Move all selected links to a specific collection'),
+              subtitle: const Text(
+                'Move all selected links to a specific collection',
+              ),
             ),
-            
+
             CustomRadioTile<String>(
               value: 'uncategorize',
               groupValue: _selectedOperation,
@@ -89,7 +90,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
               title: const Text('Remove from Collections'),
               subtitle: const Text('Move all selected links to uncategorized'),
             ),
-            
+
             CustomRadioTile<String>(
               value: 'delete',
               groupValue: _selectedOperation,
@@ -110,16 +111,18 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
               const SizedBox(height: 16),
               Text(
                 'Select target collection:',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Container(
                 height: 200,
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.3),
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -138,7 +141,10 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                       title: Text(collection.name),
                       subtitle: Text('${collection.linkCount} links'),
                       dense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 4.0,
+                      ),
                     );
                   },
                 ),
@@ -180,18 +186,24 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: _isImmediateSync 
-                      ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  color:
+                      _isImmediateSync
+                          ? Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                          : Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       _isImmediateSync ? Icons.sync : Icons.sync_disabled,
-                      color: _isImmediateSync 
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      color:
+                          _isImmediateSync
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -201,9 +213,12 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                             ? 'Changes will be synced to server immediately'
                             : 'Changes will be saved locally and synced manually',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: _isImmediateSync 
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          color:
+                              _isImmediateSync
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -239,7 +254,8 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
                     value: _progress,
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -254,8 +270,11 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                       if (_successCount > 0 || _failedCount > 0)
                         Text(
                           'Success: $_successCount, Failed: $_failedCount',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                     ],
@@ -265,7 +284,9 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.errorContainer.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Column(
@@ -279,13 +300,17 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          ...(_errors.take(3).map((error) => Text(
-                            '• $error',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontSize: 12,
-                            ),
-                          ))),
+                          ...(_errors
+                              .take(3)
+                              .map(
+                                (error) => Text(
+                                  '• $error',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              )),
                           if (_errors.length > 3)
                             Text(
                               '... and ${_errors.length - 3} more',
@@ -312,13 +337,14 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
         ),
         FilledButton(
           onPressed: _isProcessing ? null : _performOperation,
-          child: _isProcessing
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Execute'),
+          child:
+              _isProcessing
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Execute'),
         ),
       ],
     );
@@ -326,12 +352,10 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
 
   Future<void> _performOperation() async {
     if (_selectedOperation == null) return;
-    
+
     if (_selectedOperation == 'move' && _targetCollection == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a target collection'),
-        ),
+        const SnackBar(content: Text('Please select a target collection')),
       );
       return;
     }
@@ -347,7 +371,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
 
     try {
       final totalLinks = widget.selectedLinks.length;
-      
+
       switch (_selectedOperation) {
         case 'move':
           if (_targetCollection != null) {
@@ -364,17 +388,18 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
 
       if (mounted) {
         widget.onOperationComplete();
-        
+
         // Show comprehensive completion message
-        final operationName = _selectedOperation == 'move' 
-            ? 'moved to ${_targetCollection?.name}'
-            : _selectedOperation == 'uncategorize' 
+        final operationName =
+            _selectedOperation == 'move'
+                ? 'moved to ${_targetCollection?.name}'
+                : _selectedOperation == 'uncategorize'
                 ? 'removed from collections'
                 : 'deleted';
-        
+
         String message;
         Color? backgroundColor;
-        
+
         if (_errors.isEmpty) {
           // Complete success
           message = '$_successCount links $operationName successfully';
@@ -386,7 +411,8 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
           backgroundColor = Theme.of(context).colorScheme.primary;
         } else if (_successCount > 0) {
           // Partial success
-          message = '$_successCount links $operationName successfully, $_failedCount failed';
+          message =
+              '$_successCount links $operationName successfully, $_failedCount failed';
           if (_isImmediateSync) {
             message += '. Failed items marked for manual sync.';
           }
@@ -396,7 +422,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
           message = 'Operation failed: ${_errors.first}';
           backgroundColor = Theme.of(context).colorScheme.error;
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
@@ -404,7 +430,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
             duration: Duration(seconds: _errors.isEmpty ? 3 : 6),
           ),
         );
-        
+
         // Close dialog after a brief delay to show final progress
         await Future.delayed(const Duration(milliseconds: 1500));
         if (mounted) {
@@ -415,7 +441,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
       setState(() {
         _isProcessing = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -427,9 +453,12 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
     }
   }
 
-  Future<void> _performBulkMove(String? targetCollection, int totalLinks) async {
+  Future<void> _performBulkMove(
+    String? targetCollection,
+    int totalLinks,
+  ) async {
     final linkIds = widget.selectedLinks.map((link) => link.id!).toList();
-    
+
     try {
       final result = await _linkService.moveLinksBulk(
         linkIds: linkIds,
@@ -437,19 +466,20 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
         onProgress: (completed, total) {
           setState(() {
             _progress = completed / total;
-            _progressText = _isImmediateSync 
-                ? 'Moving and syncing link $completed of $total...'
-                : 'Moving link $completed of $total...';
+            _progressText =
+                _isImmediateSync
+                    ? 'Moving and syncing link $completed of $total...'
+                    : 'Moving link $completed of $total...';
           });
         },
       );
-      
+
       _handleBulkOperationResult(result, totalLinks, 'move');
     } catch (e) {
       _errors.add('Bulk move operation failed: ${e.toString()}');
       _failedCount = totalLinks;
     }
-    
+
     setState(() {
       _progress = 1.0;
       _progressText = _generateCompletionText();
@@ -458,26 +488,27 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
 
   Future<void> _performBulkDelete(int totalLinks) async {
     final linkIds = widget.selectedLinks.map((link) => link.id!).toList();
-    
+
     try {
       final result = await _linkService.deleteLinksBulk(
         linkIds: linkIds,
         onProgress: (completed, total) {
           setState(() {
             _progress = completed / total;
-            _progressText = _isImmediateSync 
-                ? 'Deleting and syncing link $completed of $total...'
-                : 'Deleting link $completed of $total...';
+            _progressText =
+                _isImmediateSync
+                    ? 'Deleting and syncing link $completed of $total...'
+                    : 'Deleting link $completed of $total...';
           });
         },
       );
-      
+
       _handleBulkOperationResult(result, totalLinks, 'delete');
     } catch (e) {
       _errors.add('Bulk delete operation failed: ${e.toString()}');
       _failedCount = totalLinks;
     }
-    
+
     setState(() {
       _progress = 1.0;
       _progressText = _generateCompletionText();
@@ -485,7 +516,11 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
   }
 
   /// Handles the result of a bulk operation and updates counters
-  void _handleBulkOperationResult(SyncResult result, int totalLinks, String operationType) {
+  void _handleBulkOperationResult(
+    SyncResult result,
+    int totalLinks,
+    String operationType,
+  ) {
     switch (result.type) {
       case SyncResultType.immediateSuccess:
       case SyncResultType.manualQueued:
@@ -494,11 +529,15 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
       case SyncResultType.immediatePartialFailure:
         _successCount = totalLinks - result.failedItemIds.length;
         _failedCount = result.failedItemIds.length;
-        _errors.add(result.errorMessage ?? 'Some $operationType operations failed');
+        _errors.add(
+          result.errorMessage ?? 'Some $operationType operations failed',
+        );
         break;
       case SyncResultType.immediateFailure:
         _failedCount = totalLinks;
-        _errors.add(result.errorMessage ?? 'Bulk $operationType operation failed');
+        _errors.add(
+          result.errorMessage ?? 'Bulk $operationType operation failed',
+        );
         break;
     }
   }
@@ -506,7 +545,7 @@ class _BulkOperationsDialogState extends State<BulkOperationsDialog> {
   /// Generates completion text based on operation results
   String _generateCompletionText() {
     if (_errors.isEmpty) {
-      return _isImmediateSync 
+      return _isImmediateSync
           ? 'Operation completed and synced successfully'
           : 'Operation completed locally';
     } else if (_successCount > 0) {

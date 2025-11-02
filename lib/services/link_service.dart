@@ -24,7 +24,7 @@ class LinkService {
     String? collection,
   }) async {
     final db = await AppDb.instance();
-    
+
     // Insert link into local database first
     final linkId = await db.insert('links', {
       'url': url,
@@ -88,15 +88,19 @@ class LinkService {
     String? collection,
   }) async {
     final db = await AppDb.instance();
-    
+
     // Get current link data
-    final linkRows = await db.query('links', where: 'id = ?', whereArgs: [linkId]);
+    final linkRows = await db.query(
+      'links',
+      where: 'id = ?',
+      whereArgs: [linkId],
+    );
     if (linkRows.isEmpty) {
       return SyncResult.immediateFailure('Link not found');
     }
-    
+
     final currentLink = LinkItem.fromMap(linkRows.first);
-    
+
     // Update link in local database
     await db.update(
       'links',
@@ -126,10 +130,7 @@ class LinkService {
       markAsSynced: () async {
         await db.update(
           'links',
-          {
-            'is_dirty': 0,
-            'last_synced_at': DateTime.now().toIso8601String(),
-          },
+          {'is_dirty': 0, 'last_synced_at': DateTime.now().toIso8601String()},
           where: 'id = ?',
           whereArgs: [linkId],
         );
@@ -154,19 +155,21 @@ class LinkService {
   }
 
   /// Deletes a link with configurable sync behavior
-  Future<SyncResult> deleteLink({
-    required int linkId,
-  }) async {
+  Future<SyncResult> deleteLink({required int linkId}) async {
     final db = await AppDb.instance();
-    
+
     // Get current link data before deletion
-    final linkRows = await db.query('links', where: 'id = ?', whereArgs: [linkId]);
+    final linkRows = await db.query(
+      'links',
+      where: 'id = ?',
+      whereArgs: [linkId],
+    );
     if (linkRows.isEmpty) {
       return SyncResult.immediateFailure('Link not found');
     }
-    
+
     final currentLink = LinkItem.fromMap(linkRows.first);
-    
+
     // Create sync operation before deleting locally
     final operation = LinkDeleteOperation(
       localId: linkId,
@@ -190,15 +193,19 @@ class LinkService {
     String? toCollection,
   }) async {
     final db = await AppDb.instance();
-    
+
     // Get current link data
-    final linkRows = await db.query('links', where: 'id = ?', whereArgs: [linkId]);
+    final linkRows = await db.query(
+      'links',
+      where: 'id = ?',
+      whereArgs: [linkId],
+    );
     if (linkRows.isEmpty) {
       return SyncResult.immediateFailure('Link not found');
     }
-    
+
     final currentLink = LinkItem.fromMap(linkRows.first);
-    
+
     // Update link collection in local database
     await db.update(
       'links',
@@ -221,10 +228,7 @@ class LinkService {
       markAsSynced: () async {
         await db.update(
           'links',
-          {
-            'is_dirty': 0,
-            'last_synced_at': DateTime.now().toIso8601String(),
-          },
+          {'is_dirty': 0, 'last_synced_at': DateTime.now().toIso8601String()},
           where: 'id = ?',
           whereArgs: [linkId],
         );
@@ -263,21 +267,25 @@ class LinkService {
     final db = await AppDb.instance();
     final operations = <LinkMoveOperation>[];
     final errors = <String>[];
-    
+
     // Prepare all operations
     for (int i = 0; i < linkIds.length; i++) {
       final linkId = linkIds[i];
-      
+
       try {
         // Get current link data
-        final linkRows = await db.query('links', where: 'id = ?', whereArgs: [linkId]);
+        final linkRows = await db.query(
+          'links',
+          where: 'id = ?',
+          whereArgs: [linkId],
+        );
         if (linkRows.isEmpty) {
           errors.add('Link with ID $linkId not found');
           continue;
         }
-        
+
         final currentLink = LinkItem.fromMap(linkRows.first);
-        
+
         // Update link collection in local database
         await db.update(
           'links',
@@ -309,33 +317,32 @@ class LinkService {
             );
           },
         );
-        
+
         operations.add(operation);
         onProgress?.call(i + 1, linkIds.length);
-        
       } catch (e) {
         errors.add('Failed to prepare link $linkId: ${e.toString()}');
       }
     }
-    
+
     if (operations.isEmpty) {
       return SyncResult.immediateFailure(
         'No links could be processed: ${errors.join('; ')}',
         linkIds.map((id) => id.toString()).toList(),
       );
     }
-    
+
     // Execute sync based on user preference
     final strategy = await _getSyncStrategy();
-    
+
     // Create bulk operation for sync
     final bulkOperation = BulkOperation(
       operations: operations,
       onProgress: onProgress,
     );
-    
+
     final result = await strategy.executeSync(bulkOperation);
-    
+
     // Handle partial failures
     if (errors.isNotEmpty) {
       if (result.success) {
@@ -350,7 +357,7 @@ class LinkService {
         );
       }
     }
-    
+
     return result;
   }
 
@@ -362,63 +369,74 @@ class LinkService {
     final db = await AppDb.instance();
     final operations = <LinkDeleteOperation>[];
     final errors = <String>[];
-    
+
     // Prepare all operations
     for (int i = 0; i < linkIds.length; i++) {
       final linkId = linkIds[i];
-      
+
       try {
         // Get current link data before deletion
-        final linkRows = await db.query('links', where: 'id = ?', whereArgs: [linkId]);
+        final linkRows = await db.query(
+          'links',
+          where: 'id = ?',
+          whereArgs: [linkId],
+        );
         if (linkRows.isEmpty) {
           errors.add('Link with ID $linkId not found');
           continue;
         }
-        
+
         final currentLink = LinkItem.fromMap(linkRows.first);
-        
+
         // Create sync operation
         final operation = LinkDeleteOperation(
           localId: linkId,
           remoteId: currentLink.remoteId,
           url: currentLink.url,
         );
-        
+
         operations.add(operation);
         onProgress?.call(i + 1, linkIds.length);
-        
       } catch (e) {
-        errors.add('Failed to prepare link $linkId for deletion: ${e.toString()}');
+        errors.add(
+          'Failed to prepare link $linkId for deletion: ${e.toString()}',
+        );
       }
     }
-    
+
     if (operations.isEmpty) {
       return SyncResult.immediateFailure(
         'No links could be processed for deletion: ${errors.join('; ')}',
         linkIds.map((id) => id.toString()).toList(),
       );
     }
-    
+
     // Execute sync based on user preference
     final strategy = await _getSyncStrategy();
-    
+
     // Create bulk operation for sync
     final bulkOperation = BulkOperation(
       operations: operations,
       onProgress: onProgress,
     );
-    
+
     final result = await strategy.executeSync(bulkOperation);
-    
+
     // Always delete locally regardless of sync result
     for (final operation in operations) {
       try {
-        await db.delete('links', where: 'id = ?', whereArgs: [operation.localId]);
+        await db.delete(
+          'links',
+          where: 'id = ?',
+          whereArgs: [operation.localId],
+        );
       } catch (e) {
-        errors.add('Failed to delete local link ${operation.localId}: ${e.toString()}');
+        errors.add(
+          'Failed to delete local link ${operation.localId}: ${e.toString()}',
+        );
       }
     }
-    
+
     // Handle partial failures
     if (errors.isNotEmpty) {
       if (result.success) {
@@ -433,7 +451,7 @@ class LinkService {
         );
       }
     }
-    
+
     return result;
   }
 
@@ -449,24 +467,28 @@ class LinkService {
     final db = await AppDb.instance();
     final operations = <LinkMoveOperation>[];
     final errors = <String>[];
-    
+
     // Prepare all operations
     for (int i = 0; i < linkIds.length; i++) {
       final linkId = linkIds[i];
-      
+
       try {
         // Check for cancellation during preparation
         cancellationToken?.throwIfCancelled();
-        
+
         // Get current link data
-        final linkRows = await db.query('links', where: 'id = ?', whereArgs: [linkId]);
+        final linkRows = await db.query(
+          'links',
+          where: 'id = ?',
+          whereArgs: [linkId],
+        );
         if (linkRows.isEmpty) {
           errors.add('Link with ID $linkId not found');
           continue;
         }
-        
+
         final currentLink = LinkItem.fromMap(linkRows.first);
-        
+
         // Update link collection in local database
         await db.update(
           'links',
@@ -498,9 +520,8 @@ class LinkService {
             );
           },
         );
-        
+
         operations.add(operation);
-        
       } catch (e) {
         if (e is OperationCancelledException) {
           rethrow;
@@ -508,14 +529,14 @@ class LinkService {
         errors.add('Failed to prepare link $linkId: ${e.toString()}');
       }
     }
-    
+
     if (operations.isEmpty) {
       return SyncResult.immediateFailure(
         'No links could be processed: ${errors.join('; ')}',
         linkIds.map((id) => id.toString()).toList(),
       );
     }
-    
+
     // Use the optimized bulk sync execution with performance enhancements
     final results = await SyncStrategyFactory.executeBulkSyncOptimized(
       operations,
@@ -524,17 +545,20 @@ class LinkService {
       maxConcurrency: maxConcurrency ?? 3, // Default to 3 concurrent operations
       enableRetry: true,
     );
-    
+
     // Analyze results
     final successCount = results.where((r) => r.success).length;
     final failureCount = results.length - successCount;
-    
+
     if (failureCount == 0) {
       return SyncResult.immediateSuccess();
     } else if (successCount > 0) {
       return SyncResult.immediatePartialFailure(
         'Bulk move partially completed: $successCount succeeded, $failureCount failed',
-        results.where((r) => !r.success).expand((r) => r.failedItemIds).toList(),
+        results
+            .where((r) => !r.success)
+            .expand((r) => r.failedItemIds)
+            .toList(),
       );
     } else {
       return SyncResult.immediateFailure(
@@ -557,10 +581,10 @@ class LinkService {
     Function(SyncProgress progress)? onProgress,
   }) async {
     final db = await AppDb.instance();
-    
+
     // Check for cancellation before starting
     cancellationToken?.throwIfCancelled();
-    
+
     // Insert link into local database first
     final linkId = await db.insert('links', {
       'url': url,
@@ -640,7 +664,10 @@ class LinkService {
   }
 
   /// Formats a sync result into a user-friendly message
-  static String formatSyncResultMessage(SyncResult result, String operationName) {
+  static String formatSyncResultMessage(
+    SyncResult result,
+    String operationName,
+  ) {
     switch (result.type) {
       case SyncResultType.immediateSuccess:
         return '$operationName and synced successfully';
