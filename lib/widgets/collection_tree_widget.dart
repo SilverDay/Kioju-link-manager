@@ -139,8 +139,6 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
                     const SizedBox(height: 8),
                     _buildUncategorizedSection(),
                     const SizedBox(height: 16),
-                    _buildAddCollectionButton(),
-                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -505,13 +503,7 @@ class CollectionTreeWidgetState extends State<CollectionTreeWidget> {
     );
   }
 
-  Widget _buildAddCollectionButton() {
-    return ElevatedButton.icon(
-      onPressed: widget.onCreateCollection,
-      icon: const Icon(Icons.add),
-      label: const Text('Add Collection'),
-    );
-  }
+
 
   Widget _buildMultiSelectToolbar() {
     return Container(

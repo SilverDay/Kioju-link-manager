@@ -1383,31 +1383,26 @@ class _HomePageState extends State<HomePage> {
                       value: 'add',
                       child: Row(
                         children: [
-                          Icon(Icons.add),
+                          Icon(Icons.add_link),
                           SizedBox(width: 8),
-                          Text('Add Link'),
+                          Text('New Link'),
                         ],
                       ),
                     ),
                     const PopupMenuItem(
-                      value: 'import',
+                      value: 'create_collection',
                       child: Row(
                         children: [
-                          Icon(Icons.upload_file),
+                          Icon(Icons.create_new_folder),
                           SizedBox(width: 8),
-                          Text('Import'),
+                          Text('New Collection'),
                         ],
                       ),
                     ),
                     const PopupMenuItem(
-                      value: 'export',
-                      child: Row(
-                        children: [
-                          Icon(Icons.download),
-                          SizedBox(width: 8),
-                          Text('Export'),
-                        ],
-                      ),
+                      value: 'divider1',
+                      enabled: false,
+                      child: Divider(),
                     ),
                     const PopupMenuItem(
                       value: 'pull',
@@ -1428,6 +1423,36 @@ class _HomePageState extends State<HomePage> {
                           Text('Sync Up'),
                         ],
                       ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'divider2',
+                      enabled: false,
+                      child: Divider(),
+                    ),
+                    const PopupMenuItem(
+                      value: 'import',
+                      child: Row(
+                        children: [
+                          Icon(Icons.file_download),
+                          SizedBox(width: 8),
+                          Text('Import from Browser'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'export',
+                      child: Row(
+                        children: [
+                          Icon(Icons.file_upload),
+                          SizedBox(width: 8),
+                          Text('Export to Browser'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'divider3',
+                      enabled: false,
+                      child: Divider(),
                     ),
                     const PopupMenuItem(
                       value: 'settings',
@@ -1624,35 +1649,30 @@ class _HomePageState extends State<HomePage> {
         _isImporting || _isExporting || _isSyncing;
 
     return [
+      // New Link
       IconButton(
         onPressed: isAnyOperationRunning ? null : _showAddLinkDialog,
-        icon: const Icon(Icons.add),
-        tooltip: 'Add Link',
+        icon: const Icon(Icons.add_link),
+        tooltip: 'New Link',
       ),
+      
+      // New Collection (Folder with +)
       IconButton(
-        onPressed: (_isImporting || isAnyOperationRunning) ? null : _import,
-        icon:
-            _isImporting
-                ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                : const Icon(Icons.upload_file),
-        tooltip: _isImporting ? 'Importing...' : 'Import',
+        onPressed: isAnyOperationRunning ? null : _createCollection,
+        icon: const Icon(Icons.create_new_folder),
+        tooltip: 'New Collection',
       ),
-      IconButton(
-        onPressed: (_isExporting || isAnyOperationRunning) ? null : _export,
-        icon:
-            _isExporting
-                ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                : const Icon(Icons.download),
-        tooltip: _isExporting ? 'Exporting...' : 'Export',
+      
+      // Spacer
+      const SizedBox(width: 8),
+      Container(
+        height: 24,
+        width: 1,
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
       ),
+      const SizedBox(width: 8),
+      
+      // Sync Down
       IconButton(
         onPressed: (_isSyncing || isAnyOperationRunning) ? null : _pull,
         icon:
@@ -1665,6 +1685,8 @@ class _HomePageState extends State<HomePage> {
                 : const Icon(Icons.cloud_download),
         tooltip: _isSyncing ? 'Syncing...' : 'Sync Down',
       ),
+      
+      // Sync Up
       IconButton(
         onPressed: (_isSyncing || isAnyOperationRunning) ? null : _push,
         icon:
@@ -1677,6 +1699,54 @@ class _HomePageState extends State<HomePage> {
                 : const Icon(Icons.cloud_upload),
         tooltip: _isSyncing ? 'Syncing...' : 'Sync Up',
       ),
+      
+      // Spacer
+      const SizedBox(width: 8),
+      Container(
+        height: 24,
+        width: 1,
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+      ),
+      const SizedBox(width: 8),
+      
+      // Import from Browser (better icon)
+      IconButton(
+        onPressed: (_isImporting || isAnyOperationRunning) ? null : _import,
+        icon:
+            _isImporting
+                ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(Icons.file_download),
+        tooltip: _isImporting ? 'Importing...' : 'Import from Browser',
+      ),
+      
+      // Export to Browser (better icon)
+      IconButton(
+        onPressed: (_isExporting || isAnyOperationRunning) ? null : _export,
+        icon:
+            _isExporting
+                ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                : const Icon(Icons.file_upload),
+        tooltip: _isExporting ? 'Exporting...' : 'Export to Browser',
+      ),
+      
+      // Spacer
+      const SizedBox(width: 8),
+      Container(
+        height: 24,
+        width: 1,
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+      ),
+      const SizedBox(width: 8),
+      
+      // Settings
       IconButton(
         onPressed:
             isAnyOperationRunning
@@ -1702,17 +1772,20 @@ class _HomePageState extends State<HomePage> {
       case 'add':
         _showAddLinkDialog();
         break;
-      case 'import':
-        _import();
-        break;
-      case 'export':
-        _export();
+      case 'create_collection':
+        _createCollection();
         break;
       case 'pull':
         _pull();
         break;
       case 'push':
         _push();
+        break;
+      case 'import':
+        _import();
+        break;
+      case 'export':
+        _export();
         break;
       case 'settings':
         Navigator.of(
@@ -1728,6 +1801,11 @@ class _HomePageState extends State<HomePage> {
             await _refresh();
           }
         });
+        break;
+      case 'divider1':
+      case 'divider2':
+      case 'divider3':
+        // Ignore divider actions
         break;
     }
   }
