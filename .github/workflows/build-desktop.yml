@@ -95,6 +95,8 @@ jobs:
     if: github.event_name == 'release'
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Download Windows artifact
@@ -119,22 +121,9 @@ jobs:
         cd macos-build
         zip -r ../kioju-link-manager-macos.zip .
         
-    - name: Upload Windows release asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v2
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./kioju-link-manager-windows.zip
-        asset_name: kioju-link-manager-windows.zip
-        asset_content_type: application/zip
-        
-    - name: Upload macOS release asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./kioju-link-manager-macos.zip
-        asset_name: kioju-link-manager-macos.zip
-        asset_content_type: application/zip
+        files: |
+          kioju-link-manager-windows.zip
+          kioju-link-manager-macos.zip
