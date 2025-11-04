@@ -1,12 +1,18 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../constants/app_constants.dart';
 
 class AppSettings {
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: IOSOptions(),
-    lOptions: LinuxOptions(),
-    wOptions: WindowsOptions(),
-    mOptions: MacOsOptions(),
+    aOptions: const AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: const IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+    lOptions: const LinuxOptions(),
+    wOptions: const WindowsOptions(),
+    mOptions: const MacOsOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      accessGroup: AppConstants.macosKeychainAccessGroup,
+    ),
   );
 
   static const String _autoFetchMetadataKey = 'auto_fetch_metadata';
