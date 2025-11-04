@@ -127,6 +127,11 @@ class KiojuApi {
     }
   }
 
+  /// Helper method to check if a token is valid (not null or empty)
+  static bool _isValidToken(String? token) {
+    return token != null && token.isNotEmpty;
+  }
+
   static Future<void> setToken(String? token) async {
     if (token == null || token.isEmpty) {
       // Delete from both storage locations
@@ -168,7 +173,8 @@ class KiojuApi {
       } catch (e) {
         // If both storage methods fail, throw an exception
         throw Exception(
-          'Failed to save API token to both secure storage and config table: $e',
+          'Failed to save API token to both secure storage and config table. '
+          'Please check app permissions and try again. Error: $e',
         );
       }
     }
@@ -189,7 +195,7 @@ class KiojuApi {
     // Try to read from secure storage (keychain) first
     try {
       final token = await _storage.read(key: _tokenKey);
-      if (token != null && token.isNotEmpty) {
+      if (_isValidToken(token)) {
         return token;
       }
     } catch (e) {
@@ -201,7 +207,7 @@ class KiojuApi {
     // If keychain fails or returns null, try config table as fallback
     try {
       final token = await _readTokenFromConfig();
-      if (token != null && token.isNotEmpty) {
+      if (_isValidToken(token)) {
         return token;
       }
     } catch (e) {
