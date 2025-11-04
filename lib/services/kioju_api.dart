@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:sqflite/sqflite.dart' as sqflite;
 import '../constants/app_constants.dart';
 import '../utils/security_utils.dart';
+import '../db.dart';
 
 /// Custom exception for rate limiting
 class RateLimitException implements Exception {
@@ -61,6 +63,7 @@ class KiojuApi {
     lOptions: const LinuxOptions(),
   );
   static const _tokenKey = 'api_token';
+  static const _configTokenKey = 'api_token'; // Key for config table fallback
   static const _baseUrl = 'https://kioju.de/api/api.php'; // Hardcoded API URL
 
   // Security configurations
@@ -74,26 +77,100 @@ class KiojuApi {
   static DateTime? _lastRateLimitTime;
   static Duration? _rateLimitCooldown;
 
-  static Future<void> setToken(String? token) async {
+  /// Fallback: Write token to config table
+  static Future<void> _writeTokenToConfig(String token) async {
     try {
-      if (token == null || token.isEmpty) {
-        await _storage.delete(key: _tokenKey);
-      } else {
-        // Validate token before storing
-        final validation = SecurityUtils.validateApiToken(token);
-        if (!validation.isValid) {
-          throw ArgumentError('Invalid API token: ${validation.message}');
-        }
+      final db = await AppDb.instance();
+      await db.insert(
+        'config',
+        {'key': _configTokenKey, 'value': token},
+        conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
+      );
+    } catch (e) {
+      // Log but don't throw - this is a fallback mechanism
+      print('Warning: Failed to write token to config table: $e');
+    }
+  }
 
-        // For macOS, we use secure storage with keychain access group
-        await _storage.write(
-          key: _tokenKey,
-          value: validation.sanitizedValue,
+  /// Fallback: Read token from config table
+  static Future<String?> _readTokenFromConfig() async {
+    try {
+      final db = await AppDb.instance();
+      final result = await db.query(
+        'config',
+        where: 'key = ?',
+        whereArgs: [_configTokenKey],
+      );
+      if (result.isNotEmpty) {
+        return result.first['value'] as String?;
+      }
+      return null;
+    } catch (e) {
+      // Log but don't throw - this is a fallback mechanism
+      print('Warning: Failed to read token from config table: $e');
+      return null;
+    }
+  }
+
+  /// Fallback: Delete token from config table
+  static Future<void> _deleteTokenFromConfig() async {
+    try {
+      final db = await AppDb.instance();
+      await db.delete(
+        'config',
+        where: 'key = ?',
+        whereArgs: [_configTokenKey],
+      );
+    } catch (e) {
+      // Log but don't throw - this is a fallback mechanism
+      print('Warning: Failed to delete token from config table: $e');
+    }
+  }
+
+  static Future<void> setToken(String? token) async {
+    if (token == null || token.isEmpty) {
+      // Delete from both storage locations
+      try {
+        await _storage.delete(key: _tokenKey);
+      } catch (e) {
+        print('Warning: Failed to delete token from secure storage: $e');
+      }
+      await _deleteTokenFromConfig();
+      return;
+    }
+
+    // Validate token before storing
+    final validation = SecurityUtils.validateApiToken(token);
+    if (!validation.isValid) {
+      throw ArgumentError('Invalid API token: ${validation.message}');
+    }
+
+    final sanitizedToken = validation.sanitizedValue;
+
+    // Try to store in secure storage (keychain) first
+    bool keychainSuccess = false;
+    try {
+      await _storage.write(
+        key: _tokenKey,
+        value: sanitizedToken,
+      );
+      keychainSuccess = true;
+    } catch (e) {
+      // Log the keychain failure
+      print('Warning: Failed to save token to secure storage (keychain): $e');
+      print('Falling back to config table storage (less secure)');
+    }
+
+    // If keychain fails, use config table as fallback
+    if (!keychainSuccess) {
+      try {
+        await _writeTokenToConfig(sanitizedToken);
+      } catch (e) {
+        // If both storage methods fail, throw an exception
+        throw Exception(
+          'Failed to save API token to both secure storage and config table: $e',
         );
       }
-    } catch (e) {
-      // Re-throw with more context for debugging
-      throw Exception('Failed to save API token: $e');
     }
   }
 
@@ -109,12 +186,30 @@ class KiojuApi {
 
   /// Helper method to read the token with consistent configuration
   static Future<String?> _readToken() async {
+    // Try to read from secure storage (keychain) first
     try {
-      return await _storage.read(key: _tokenKey);
+      final token = await _storage.read(key: _tokenKey);
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
     } catch (e) {
-      // Silent failure - return null if secure storage is not available
-      return null;
+      // Log the keychain failure
+      print('Warning: Failed to read token from secure storage (keychain): $e');
+      print('Attempting to read from config table fallback');
     }
+
+    // If keychain fails or returns null, try config table as fallback
+    try {
+      final token = await _readTokenFromConfig();
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    } catch (e) {
+      print('Warning: Failed to read token from config table: $e');
+    }
+
+    // Both storage methods failed or returned null
+    return null;
   }
 
   /// Gets rate limit status information
