@@ -49,16 +49,16 @@ class ApiException implements Exception {
 
 class KiojuApi {
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: IOSOptions(
+    aOptions: const AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: const IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
-    mOptions: MacOsOptions(
+    mOptions: const MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
       accessGroup: AppConstants.macosKeychainAccessGroup,
     ),
-    wOptions: WindowsOptions(),
-    lOptions: LinuxOptions(),
+    wOptions: const WindowsOptions(),
+    lOptions: const LinuxOptions(),
   );
   static const _tokenKey = 'api_token';
   static const _baseUrl = 'https://kioju.de/api/api.php'; // Hardcoded API URL
