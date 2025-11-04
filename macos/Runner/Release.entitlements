@@ -10,7 +10,7 @@
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.silverday.kiojulinkmanager</string>
+		<string>$(AppIdentifierPrefix)de.kioju.linkmanager</string>
 	</array>
 </dict>
 </plist>
