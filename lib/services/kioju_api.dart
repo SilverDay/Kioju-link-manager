@@ -47,7 +47,18 @@ class ApiException implements Exception {
 }
 
 class KiojuApi {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+    mOptions: MacOsOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      accessGroup: 'de.kioju.linkmanager',
+    ),
+    wOptions: WindowsOptions(),
+    lOptions: LinuxOptions(),
+  );
   static const _tokenKey = 'api_token';
   static const _baseUrl = 'https://kioju.de/api/api.php'; // Hardcoded API URL
 
@@ -73,19 +84,10 @@ class KiojuApi {
           throw ArgumentError('Invalid API token: ${validation.message}');
         }
 
-        // For macOS, we might need to configure secure storage options
+        // For macOS, we use secure storage with keychain access group
         await _storage.write(
           key: _tokenKey,
           value: validation.sanitizedValue,
-          aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-          iOptions: const IOSOptions(
-            accessibility: KeychainAccessibility.first_unlock_this_device,
-          ),
-          mOptions: const MacOsOptions(
-            accessibility: KeychainAccessibility.first_unlock_this_device,
-          ),
-          wOptions: const WindowsOptions(),
-          lOptions: const LinuxOptions(),
         );
       }
     } catch (e) {
@@ -107,18 +109,7 @@ class KiojuApi {
   /// Helper method to read the token with consistent configuration
   static Future<String?> _readToken() async {
     try {
-      return await _storage.read(
-        key: _tokenKey,
-        aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-        iOptions: const IOSOptions(
-          accessibility: KeychainAccessibility.first_unlock_this_device,
-        ),
-        mOptions: const MacOsOptions(
-          accessibility: KeychainAccessibility.first_unlock_this_device,
-        ),
-        wOptions: const WindowsOptions(),
-        lOptions: const LinuxOptions(),
-      );
+      return await _storage.read(key: _tokenKey);
     } catch (e) {
       // Silent failure - return null if secure storage is not available
       return null;

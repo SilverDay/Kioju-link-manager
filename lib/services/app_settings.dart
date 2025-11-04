@@ -6,7 +6,9 @@ class AppSettings {
     iOptions: IOSOptions(),
     lOptions: LinuxOptions(),
     wOptions: WindowsOptions(),
-    mOptions: MacOsOptions(),
+    mOptions: const MacOsOptions(
+      accessGroup: 'de.kioju.linkmanager',
+    ),
   );
 
   static const String _autoFetchMetadataKey = 'auto_fetch_metadata';
