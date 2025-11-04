@@ -4,7 +4,9 @@ import '../constants/app_constants.dart';
 class AppSettings {
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
     aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: const IOSOptions(),
+    iOptions: const IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
     lOptions: const LinuxOptions(),
     wOptions: const WindowsOptions(),
     mOptions: const MacOsOptions(
