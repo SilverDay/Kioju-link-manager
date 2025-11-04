@@ -11,7 +11,7 @@ class AppSettings {
     wOptions: const WindowsOptions(),
     mOptions: const MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
-      accessGroup: AppConstants.macosKeychainAccessGroup,
+      groupId: AppConstants.macosKeychainAccessGroup,
     ),
   );
 
