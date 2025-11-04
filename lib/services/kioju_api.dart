@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import '../constants/app_constants.dart';
 import '../utils/security_utils.dart';
 
 /// Custom exception for rate limiting
@@ -54,7 +55,7 @@ class KiojuApi {
     ),
     mOptions: MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
-      accessGroup: 'de.kioju.linkmanager',
+      accessGroup: AppConstants.macosKeychainAccessGroup,
     ),
     wOptions: WindowsOptions(),
     lOptions: LinuxOptions(),

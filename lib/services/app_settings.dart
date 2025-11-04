@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../constants/app_constants.dart';
 
 class AppSettings {
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
@@ -7,7 +8,7 @@ class AppSettings {
     lOptions: LinuxOptions(),
     wOptions: WindowsOptions(),
     mOptions: const MacOsOptions(
-      accessGroup: 'de.kioju.linkmanager',
+      accessGroup: AppConstants.macosKeychainAccessGroup,
     ),
   );
 
