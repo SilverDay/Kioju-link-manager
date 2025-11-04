@@ -55,7 +55,7 @@ class KiojuApi {
     ),
     mOptions: const MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
-      accessGroup: AppConstants.macosKeychainAccessGroup,
+      groupId: AppConstants.macosKeychainAccessGroup,
     ),
     wOptions: const WindowsOptions(),
     lOptions: const LinuxOptions(),
