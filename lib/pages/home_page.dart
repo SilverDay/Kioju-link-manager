@@ -20,6 +20,7 @@ import '../widgets/delete_collection_dialog.dart';
 import '../widgets/edit_collection_dialog.dart';
 import '../widgets/enhanced_search_bar.dart';
 import '../widgets/sync_conflict_dialog.dart';
+import 'browser_sync_page.dart';
 import 'link_selection_page.dart';
 import 'settings_page.dart';
 
@@ -42,8 +43,6 @@ class _HomePageState extends State<HomePage> {
   final LinkService _linkService = LinkService.instance;
 
   // Progress tracking state
-  bool _isImporting = false;
-  bool _isExporting = false;
   bool _isSyncing = false;
   bool _isLoadingCollections = false;
   bool _forceOverwriteOnSync = false;
@@ -418,149 +417,6 @@ class _HomePageState extends State<HomePage> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _import() async {
-    if (_isImporting) return; // Prevent multiple simultaneous imports
-
-    final typeGroup = XTypeGroup(
-      label: 'Bookmarks',
-      extensions: ['html', 'json'],
-    );
-    final xfile = await openFile(acceptedTypeGroups: [typeGroup]);
-    if (xfile == null) return;
-
-    setState(() {
-      _isImporting = true;
-    });
-
-    try {
-      _showProgressDialog('Importing', 'Reading bookmark file...');
-
-      final path = xfile.path;
-      final text = await xfile.readAsString();
-
-      _updateProgressDialog('Parsing bookmarks...');
-
-      // Parse bookmarks without creating collections automatically
-      ImportResult importResult;
-      if (path.endsWith('.html') ||
-          text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
-        importResult = await importFromNetscapeHtml(
-          text,
-          createCollections: false, // Don't auto-create, let user choose
-        );
-      } else if (path.endsWith('.json')) {
-        importResult = await importFromChromeJson(
-          jsonDecode(text),
-          createCollections: false, // Don't auto-create, let user choose
-        );
-      } else {
-        throw Exception('Unsupported file format');
-      }
-
-      _hideProgressDialog();
-
-      if (importResult.bookmarks.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No links found in the selected file'),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Navigate to LinkSelectionPage for selective import
-      if (mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder:
-                (context) => LinkSelectionPage(
-                  importedBookmarks: importResult.bookmarks,
-                ),
-          ),
-        );
-
-        // Refresh after returning from import page
-        await _refresh();
-      }
-    } catch (e) {
-      _hideProgressDialog();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Import failed: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isImporting = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _export() async {
-    if (_isExporting) return; // Prevent multiple simultaneous exports
-
-    setState(() {
-      _isExporting = true;
-    });
-
-    try {
-      _showProgressDialog('Exporting', 'Loading links...');
-
-      final database = await db;
-      final rows = await database.query('links');
-      final kiojuLinks =
-          rows
-              .map((r) => LinkSelectionItem.fromKioju(LinkItem.fromMap(r)))
-              .toList();
-
-      _hideProgressDialog();
-
-      if (kiojuLinks.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No links to export')));
-        }
-        return;
-      }
-
-      // Show selection dialog
-      if (mounted) {
-        await Navigator.of(context).push<Map<String, dynamic>>(
-          MaterialPageRoute(
-            builder: (_) => LinkSelectionPage(initialKiojuLinks: kiojuLinks),
-          ),
-        );
-
-        // Always refresh when returning from link selection
-        await _refresh();
-      }
-    } catch (e) {
-      _hideProgressDialog();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Export failed: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isExporting = false;
-        });
       }
     }
   }
@@ -1435,22 +1291,12 @@ class _HomePageState extends State<HomePage> {
                       child: Divider(),
                     ),
                     const PopupMenuItem(
-                      value: 'import',
+                      value: 'browser_sync',
                       child: Row(
                         children: [
-                          Icon(Icons.file_download),
+                          Icon(Icons.sync_alt),
                           SizedBox(width: 8),
-                          Text('Import from Browser'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'export',
-                      child: Row(
-                        children: [
-                          Icon(Icons.file_upload),
-                          SizedBox(width: 8),
-                          Text('Export to Browser'),
+                          Text('Browser Sync'),
                         ],
                       ),
                     ),
@@ -1627,10 +1473,7 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton:
           isMobile
               ? FloatingActionButton(
-                onPressed:
-                    (_isImporting || _isExporting || _isSyncing)
-                        ? null
-                        : _showAddLinkDialog,
+                onPressed: _isSyncing ? null : _showAddLinkDialog,
                 child: const Icon(Icons.add),
               )
               : null,
@@ -1650,8 +1493,7 @@ class _HomePageState extends State<HomePage> {
 
   // Helper methods for building UI components
   List<Widget> _buildDesktopActions() {
-    final bool isAnyOperationRunning =
-        _isImporting || _isExporting || _isSyncing;
+    final bool isAnyOperationRunning = _isSyncing;
 
     return [
       // New Link
@@ -1714,32 +1556,20 @@ class _HomePageState extends State<HomePage> {
       ),
       const SizedBox(width: 8),
 
-      // Import from Browser (better icon)
+      // Browser Sync
       IconButton(
-        onPressed: (_isImporting || isAnyOperationRunning) ? null : _import,
-        icon:
-            _isImporting
-                ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                : const Icon(Icons.file_download),
-        tooltip: _isImporting ? 'Importing...' : 'Import from Browser',
-      ),
-
-      // Export to Browser (better icon)
-      IconButton(
-        onPressed: (_isExporting || isAnyOperationRunning) ? null : _export,
-        icon:
-            _isExporting
-                ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                : const Icon(Icons.file_upload),
-        tooltip: _isExporting ? 'Exporting...' : 'Export to Browser',
+        onPressed:
+            isAnyOperationRunning
+                ? null
+                : () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const BrowserSyncPage(),
+                    ),
+                  );
+                },
+        icon: const Icon(Icons.sync_alt),
+        tooltip: 'Browser Sync',
       ),
 
       // Spacer
@@ -1786,11 +1616,10 @@ class _HomePageState extends State<HomePage> {
       case 'push':
         _push();
         break;
-      case 'import':
-        _import();
-        break;
-      case 'export':
-        _export();
+      case 'browser_sync':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const BrowserSyncPage()));
         break;
       case 'settings':
         Navigator.of(
@@ -1841,10 +1670,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed:
-                (_isImporting || _isExporting || _isSyncing)
-                    ? null
-                    : _showAddLinkDialog,
+            onPressed: _isSyncing ? null : _showAddLinkDialog,
             icon: const Icon(Icons.add),
             label: const Text('Add Your First Link'),
           ),

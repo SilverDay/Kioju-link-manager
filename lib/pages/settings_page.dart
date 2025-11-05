@@ -873,30 +873,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 8),
                   _buildHelpItem(
                     context,
-                    Icons.file_download,
-                    'Import from Browser',
-                    'Import bookmarks from your browser\'s bookmark file',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildHelpItem(
-                    context,
-                    Icons.file_upload,
-                    'Export to Browser',
-                    'Export your links to a browser-compatible bookmark file',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildHelpItem(
-                    context,
-                    Icons.save_alt,
-                    'Auto-save Exports',
-                    'When enabled, exports automatically update your last bookmark file',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildHelpItem(
-                    context,
                     Icons.sync_alt,
-                    'Import Sync Mode',
-                    'Control how imported bookmarks are synced to the server',
+                    'Browser Sync',
+                    'Dedicated interface for syncing between Kioju and browser bookmarks',
                   ),
                   const SizedBox(height: 24),
 
