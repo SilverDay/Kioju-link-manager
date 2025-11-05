@@ -496,7 +496,7 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                             onPressed: _syncSelectedToKioju,
                             icon: const Icon(Icons.arrow_forward),
                             label: Text(
-                              'Import ${_selectedBrowserBookmarks.length} to Kioju',
+                              'Import ${_selectedBrowserBookmarks.length} →',
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor:
@@ -508,9 +508,26 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                           const SizedBox(width: 8),
                         ],
 
-                        // Export actions (Kioju → Browser)
+                        // Export Selected button (when items are selected)
+                        if (_selectedKiojuLinks.isNotEmpty) ...[
+                          ElevatedButton.icon(
+                            onPressed: _exportSelectedToBrowser,
+                            icon: const Icon(Icons.arrow_back),
+                            label: Text(
+                              '← Export ${_selectedKiojuLinks.length}',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.secondary,
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.onSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+
+                        // Save All button (always rightmost when available)
                         if (_kiojuLinks.isNotEmpty) ...[
-                          // Save All button (always available)
                           ElevatedButton.icon(
                             onPressed: _saveAllToBrowser,
                             icon: const Icon(Icons.save),
@@ -520,24 +537,6 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                                   Theme.of(context).colorScheme.tertiary,
                               foregroundColor:
                                   Theme.of(context).colorScheme.onTertiary,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-
-                        // Save Selected button (when items are selected)
-                        if (_selectedKiojuLinks.isNotEmpty) ...[
-                          ElevatedButton.icon(
-                            onPressed: _exportSelectedToBrowser,
-                            icon: const Icon(Icons.save_alt),
-                            label: Text(
-                              'Save ${_selectedKiojuLinks.length} Selected',
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  Theme.of(context).colorScheme.secondary,
-                              foregroundColor:
-                                  Theme.of(context).colorScheme.onSecondary,
                             ),
                           ),
                         ],
