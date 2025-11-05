@@ -16,6 +16,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _hasToken = false;
   bool _autoFetchMetadata = true;
   bool _immediateSyncEnabled = false;
+  bool _autoSaveExport = false;
+  String _importSyncMode = 'follow_global';
   bool _isPremium = false;
   bool _isCheckingPremium = false;
   String _appVersion = 'Loading...';
@@ -30,6 +32,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _hasToken = await KiojuApi.hasToken();
     _autoFetchMetadata = await AppSettings.getAutoFetchMetadata();
     _immediateSyncEnabled = await SyncSettings.isImmediateSyncEnabled();
+    _autoSaveExport = await AppSettings.getAutoSaveExport();
+    _importSyncMode = await AppSettings.getImportSyncMode();
 
     // Load app version
     final packageInfo = await PackageInfo.fromPlatform();
@@ -339,6 +343,211 @@ class _SettingsPageState extends State<SettingsPage> {
                               }
                             }
                           },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Auto-save export setting
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.save_alt,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Auto-save Exports',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w500),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _autoSaveExport
+                                    ? 'Automatically update bookmark file when exporting'
+                                    : 'Always ask where to save exported bookmarks',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          children: [
+                            Switch(
+                              value: _autoSaveExport,
+                              onChanged: (value) async {
+                                final scaffoldMessenger = ScaffoldMessenger.of(
+                                  context,
+                                );
+
+                                setState(() {
+                                  _autoSaveExport = value;
+                                });
+
+                                await AppSettings.setAutoSaveExport(value);
+
+                                if (mounted) {
+                                  scaffoldMessenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        value
+                                            ? 'Auto-save exports enabled'
+                                            : 'Auto-save exports disabled',
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                            if (_autoSaveExport) ...[
+                              const SizedBox(height: 8),
+                              TextButton.icon(
+                                onPressed: () async {
+                                  await AppSettings.setLastExportPath(null);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Export path cleared - will ask for location on next export',
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.clear, size: 16),
+                                label: const Text('Clear Path'),
+                                style: TextButton.styleFrom(
+                                  textStyle: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Import sync mode setting
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.file_download,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Import Sync Mode',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'How should imported links be synced to the server?',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Column(
+                          children: [
+                            RadioListTile<String>(
+                              title: const Text('Follow Global Setting'),
+                              subtitle: const Text(
+                                'Use the same sync mode as other operations',
+                              ),
+                              value: 'follow_global',
+                              groupValue: _importSyncMode,
+                              onChanged: (value) async {
+                                if (value != null) {
+                                  setState(() {
+                                    _importSyncMode = value;
+                                  });
+                                  await AppSettings.setImportSyncMode(value);
+                                }
+                              },
+                            ),
+                            RadioListTile<String>(
+                              title: const Text('Always Manual'),
+                              subtitle: const Text(
+                                'Queue imported links for manual sync',
+                              ),
+                              value: 'manual',
+                              groupValue: _importSyncMode,
+                              onChanged: (value) async {
+                                if (value != null) {
+                                  setState(() {
+                                    _importSyncMode = value;
+                                  });
+                                  await AppSettings.setImportSyncMode(value);
+                                }
+                              },
+                            ),
+                            RadioListTile<String>(
+                              title: const Text('Always Immediate'),
+                              subtitle: const Text(
+                                'Sync imported links to server immediately',
+                              ),
+                              value: 'immediate',
+                              groupValue: _importSyncMode,
+                              onChanged: (value) async {
+                                if (value != null) {
+                                  setState(() {
+                                    _importSyncMode = value;
+                                  });
+                                  await AppSettings.setImportSyncMode(value);
+                                }
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -674,6 +883,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     Icons.file_upload,
                     'Export to Browser',
                     'Export your links to a browser-compatible bookmark file',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.save_alt,
+                    'Auto-save Exports',
+                    'When enabled, exports automatically update your last bookmark file',
+                  ),
+                  const SizedBox(height: 8),
+                  _buildHelpItem(
+                    context,
+                    Icons.sync_alt,
+                    'Import Sync Mode',
+                    'Control how imported bookmarks are synced to the server',
                   ),
                   const SizedBox(height: 24),
 

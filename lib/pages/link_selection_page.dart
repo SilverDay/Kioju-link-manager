@@ -1,11 +1,10 @@
-import 'dart:io';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import '../db.dart';
 import '../models/link.dart';
 import '../utils/bookmark_export.dart';
 import '../utils/bookmark_import.dart';
 import '../services/link_service.dart';
+import '../services/import_export_service.dart';
 
 class LinkSelectionItem {
   final String url;
@@ -1072,33 +1071,54 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
               )
               .toList();
 
-      final html = _exportToNetscapeHtml(linksToExport);
-      final file = await _getSaveLocation();
+      // Use the enhanced import/export service
+      final exportService = ImportExportService();
+      final result = await exportService.exportToBrowser(linksToExport);
 
-      if (file != null) {
-        await File(file.path).writeAsString(html);
+      setState(() => isLoading = false);
 
+      if (result.success) {
         // Clear selections and show success message
         setState(() {
           for (final link in selectedLinks) {
             link.isSelected = false;
           }
-          isLoading = false;
         });
 
         if (mounted) {
+          final message =
+              result.isAutoSaved
+                  ? 'Auto-saved ${result.linkCount} links to ${result.path!.split('/').last}'
+                  : 'Successfully exported ${result.linkCount} links to ${result.path!.split('/').last}';
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Successfully exported ${selectedLinks.length} links to bookmarks.html',
+              content: Row(
+                children: [
+                  Icon(
+                    result.isAutoSaved ? Icons.save_alt : Icons.save,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(message)),
+                ],
               ),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
             ),
           );
         }
-      } else {
-        setState(() => isLoading = false);
+      } else if (result.error != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Export failed: ${result.error}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
+      // If cancelled, don't show any message
     } catch (e) {
       setState(() => isLoading = false);
       if (mounted) {
@@ -1110,14 +1130,5 @@ class _LinkSelectionPageState extends State<LinkSelectionPage> {
         );
       }
     }
-  }
-
-  // Helper methods for file operations
-  String _exportToNetscapeHtml(List<LinkItem> links) {
-    return exportToNetscapeHtml(links);
-  }
-
-  Future<FileSaveLocation?> _getSaveLocation() async {
-    return getSaveLocation(suggestedName: 'bookmarks.html');
   }
 }
