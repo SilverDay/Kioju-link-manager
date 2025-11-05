@@ -471,17 +471,24 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                             tooltip: 'Reload bookmark file',
                           ),
                           IconButton(
-                            onPressed: () {
+                            onPressed: () async {
+                              // Clear the loaded bookmarks
+                              _browserSyncService.clearLoadedBookmarks();
+                              
+                              // Clear selections and force UI update
                               setState(() {
-                                _browserSyncService.clearLoadedBookmarks();
                                 _selectedBrowserBookmarks.clear();
                               });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Bookmark file cleared'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
+                              
+                              // Show confirmation
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Bookmark file cleared'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
                             },
                             icon: const Icon(Icons.clear),
                             tooltip: 'Clear bookmark file',
