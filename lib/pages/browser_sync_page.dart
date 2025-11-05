@@ -4,6 +4,7 @@ import '../models/link.dart';
 import '../services/link_service.dart';
 import '../services/import_export_service.dart';
 import '../services/browser_sync_service.dart';
+import '../services/app_settings.dart';
 
 class BrowserSyncPage extends StatefulWidget {
   const BrowserSyncPage({super.key});
@@ -168,12 +169,24 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
     try {
       final linkService = LinkService.instance;
       int imported = 0;
+      int duplicates = 0;
       final errors = <String>[];
+      final duplicateUrls = <String>[];
+
+      // Check for existing URLs in Kioju links first
+      final existingKiojuUrls = _kiojuLinks.map((link) => link.url).toSet();
 
       for (final bookmarkUrl in _selectedBrowserBookmarks) {
         final bookmark = _browserSyncService.browserBookmarks.firstWhere(
           (b) => b.url == bookmarkUrl,
         );
+
+        // Check if URL already exists in Kioju
+        if (existingKiojuUrls.contains(bookmark.url)) {
+          duplicates++;
+          duplicateUrls.add(bookmark.url);
+          continue;
+        }
 
         try {
           final result = await linkService.createLink(
@@ -202,15 +215,43 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
       });
 
       if (mounted) {
-        final message =
-            errors.isEmpty
-                ? 'Successfully imported $imported bookmarks to Kioju'
-                : 'Imported $imported bookmarks with ${errors.length} errors';
+        String message;
+        Color backgroundColor;
+
+        if (imported == 0 && duplicates > 0 && errors.isEmpty) {
+          // Only duplicates
+          message =
+              duplicates == 1
+                  ? 'Link already exists in Kioju'
+                  : '$duplicates links already exist in Kioju';
+          backgroundColor = Colors.orange;
+        } else if (imported > 0 && duplicates == 0 && errors.isEmpty) {
+          // Only successful imports
+          message = 'Successfully imported $imported bookmarks to Kioju';
+          backgroundColor = Colors.green;
+        } else if (imported > 0 && duplicates > 0 && errors.isEmpty) {
+          // Mix of imports and duplicates
+          message = 'Imported $imported bookmarks, $duplicates already existed';
+          backgroundColor = Colors.green;
+        } else if (errors.isNotEmpty) {
+          // Has errors
+          final parts = <String>[];
+          if (imported > 0) parts.add('Imported $imported');
+          if (duplicates > 0) parts.add('$duplicates duplicates');
+          parts.add('${errors.length} errors');
+          message = parts.join(', ');
+          backgroundColor = Colors.orange;
+        } else {
+          // Fallback
+          message = 'No bookmarks to import';
+          backgroundColor = Colors.grey;
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: errors.isEmpty ? Colors.green : Colors.orange,
+            backgroundColor: backgroundColor,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -301,28 +342,63 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
               .where((link) => _selectedKiojuLinks.contains(link.id))
               .toList();
 
-      final exportService = ImportExportService();
-      final result = await exportService.exportToBrowser(selectedLinks);
+      // Check auto-save setting
+      final autoSave = await AppSettings.getAutoSaveExport();
 
-      if (result.success) {
+      AddLinksResult? result;
+
+      if (autoSave && _browserSyncService.loadedFilePath != null) {
+        // Auto-save enabled: add to staging and save immediately
         setState(() {
+          result = _browserSyncService.addKiojuLinksToBookmarks(selectedLinks);
+          _selectedKiojuLinks.clear();
+        });
+
+        if (result?.added != null && result!.added > 0) {
+          final success = await _browserSyncService.saveToLoadedFile();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  success
+                      ? '${result!.message} and saved to file'
+                      : '${result!.message} but failed to save file',
+                ),
+                backgroundColor:
+                    success
+                        ? Colors.green
+                        : Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } else {
+          // Only duplicates, no save needed
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(result?.message ?? 'Unknown error'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+      } else {
+        // Auto-save disabled: just stage the changes
+        setState(() {
+          result = _browserSyncService.addKiojuLinksToBookmarks(selectedLinks);
           _selectedKiojuLinks.clear();
         });
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result.message),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else if (result.error != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Export failed: ${result.error}'),
-              backgroundColor: Theme.of(context).colorScheme.error,
+              content: Text(result?.message ?? 'Unknown error'),
+              backgroundColor:
+                  (result?.added ?? 0) > 0 ? Colors.green : Colors.orange,
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -331,8 +407,61 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Export failed: $e'),
+            content: Text('Error adding links: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveBookmarkFile() async {
+    setState(() {
+      _isLoading = true;
+      _loadingMessage = 'Saving bookmark file...';
+    });
+
+    try {
+      final result = await _browserSyncService.saveWithDialog();
+
+      if (result.success) {
+        setState(() {
+          // UI will update automatically due to hasUnsavedChanges getter
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (result.error != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Save failed: ${result.error}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+      // If result.success is false and error is null, user cancelled - no message needed
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving file: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -474,12 +603,12 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                             onPressed: () async {
                               // Clear the loaded bookmarks
                               _browserSyncService.clearLoadedBookmarks();
-                              
+
                               // Clear selections and force UI update
                               setState(() {
                                 _selectedBrowserBookmarks.clear();
                               });
-                              
+
                               // Show confirmation
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -528,6 +657,22 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                                   Theme.of(context).colorScheme.secondary,
                               foregroundColor:
                                   Theme.of(context).colorScheme.onSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+
+                        // Save button (when there are unsaved changes)
+                        if (_browserSyncService.hasUnsavedChanges) ...[
+                          ElevatedButton.icon(
+                            onPressed: _saveBookmarkFile,
+                            icon: const Icon(Icons.save_outlined),
+                            label: const Text('Save'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.primary,
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.onPrimary,
                             ),
                           ),
                           const SizedBox(width: 8),

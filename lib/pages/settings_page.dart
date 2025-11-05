@@ -227,6 +227,23 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 16),
 
+                  // Server Sync Settings Section
+                  Text(
+                    'Server Sync Settings',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Control how your changes are synchronized with the Kioju server',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
                   // Immediate sync setting
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -252,15 +269,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Immediate Sync',
+                                'Sync changes to Kioju server immediately',
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(fontWeight: FontWeight.w500),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 _immediateSyncEnabled
-                                    ? 'Changes are synced to server immediately'
-                                    : 'Changes are saved locally and synced manually',
+                                    ? 'All changes (create, edit, delete) are synced to server immediately'
+                                    : 'Changes are saved locally and synced only when you manually sync',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
@@ -350,6 +367,23 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 16),
 
+                  // File Export Settings Section
+                  Text(
+                    'File Export Settings',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Control how bookmark exports are saved to local files',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
                   // Auto-save export setting
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -375,15 +409,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Auto-save Exports',
+                                'Auto-save bookmark exports to files',
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(fontWeight: FontWeight.w500),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 _autoSaveExport
-                                    ? 'Automatically update bookmark file when exporting'
-                                    : 'Always ask where to save exported bookmarks',
+                                    ? 'Export operations automatically save to the last used file location'
+                                    : 'Export operations always show save dialog to choose file location',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
@@ -429,9 +463,11 @@ class _SettingsPageState extends State<SettingsPage> {
                               const SizedBox(height: 8),
                               TextButton.icon(
                                 onPressed: () async {
+                                  final scaffoldMessenger =
+                                      ScaffoldMessenger.of(context);
                                   await AppSettings.setLastExportPath(null);
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    scaffoldMessenger.showSnackBar(
                                       const SnackBar(
                                         content: Text(
                                           'Export path cleared - will ask for location on next export',
@@ -480,7 +516,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'Import Sync Mode',
+                              'How to sync imported bookmarks to server',
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(fontWeight: FontWeight.w500),
                             ),
@@ -488,7 +524,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'How should imported links be synced to the server?',
+                          'Choose how imported bookmarks from browser files should be synced to the Kioju server',
                           style: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(
@@ -499,52 +535,80 @@ class _SettingsPageState extends State<SettingsPage> {
                         const SizedBox(height: 12),
                         Column(
                           children: [
-                            RadioListTile<String>(
+                            ListTile(
+                              leading: Radio<String>(
+                                value: 'follow_global',
+                                groupValue: _importSyncMode,
+                                onChanged: (value) async {
+                                  if (value != null) {
+                                    setState(() {
+                                      _importSyncMode = value;
+                                    });
+                                    await AppSettings.setImportSyncMode(value);
+                                  }
+                                },
+                              ),
                               title: const Text('Follow Global Setting'),
                               subtitle: const Text(
                                 'Use the same sync mode as other operations',
                               ),
-                              value: 'follow_global',
-                              groupValue: _importSyncMode,
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  setState(() {
-                                    _importSyncMode = value;
-                                  });
-                                  await AppSettings.setImportSyncMode(value);
-                                }
+                              onTap: () async {
+                                setState(() {
+                                  _importSyncMode = 'follow_global';
+                                });
+                                await AppSettings.setImportSyncMode(
+                                  'follow_global',
+                                );
                               },
                             ),
-                            RadioListTile<String>(
+                            ListTile(
+                              leading: Radio<String>(
+                                value: 'manual',
+                                groupValue: _importSyncMode,
+                                onChanged: (value) async {
+                                  if (value != null) {
+                                    setState(() {
+                                      _importSyncMode = value;
+                                    });
+                                    await AppSettings.setImportSyncMode(value);
+                                  }
+                                },
+                              ),
                               title: const Text('Always Manual'),
                               subtitle: const Text(
                                 'Queue imported links for manual sync',
                               ),
-                              value: 'manual',
-                              groupValue: _importSyncMode,
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  setState(() {
-                                    _importSyncMode = value;
-                                  });
-                                  await AppSettings.setImportSyncMode(value);
-                                }
+                              onTap: () async {
+                                setState(() {
+                                  _importSyncMode = 'manual';
+                                });
+                                await AppSettings.setImportSyncMode('manual');
                               },
                             ),
-                            RadioListTile<String>(
+                            ListTile(
+                              leading: Radio<String>(
+                                value: 'immediate',
+                                groupValue: _importSyncMode,
+                                onChanged: (value) async {
+                                  if (value != null) {
+                                    setState(() {
+                                      _importSyncMode = value;
+                                    });
+                                    await AppSettings.setImportSyncMode(value);
+                                  }
+                                },
+                              ),
                               title: const Text('Always Immediate'),
                               subtitle: const Text(
                                 'Sync imported links to server immediately',
                               ),
-                              value: 'immediate',
-                              groupValue: _importSyncMode,
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  setState(() {
-                                    _importSyncMode = value;
-                                  });
-                                  await AppSettings.setImportSyncMode(value);
-                                }
+                              onTap: () async {
+                                setState(() {
+                                  _importSyncMode = 'immediate';
+                                });
+                                await AppSettings.setImportSyncMode(
+                                  'immediate',
+                                );
                               },
                             ),
                           ],

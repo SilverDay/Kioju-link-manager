@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import '../services/app_settings.dart';
 import '../services/sync_settings.dart';
-import '../services/sync_strategy_factory.dart';
 import '../models/link.dart';
 import '../utils/bookmark_export.dart';
 
@@ -30,25 +29,90 @@ class ImportExportService {
 
   /// Exports links to browser bookmarks with enhanced auto-save functionality
   Future<ExportResult> exportToBrowser(List<LinkItem> links) async {
+    return exportToBrowserWithPreferredPath(links, null);
+  }
+
+  /// Exports links directly to the specified file (for "Export" button)
+  Future<ExportResult> exportToLoadedFile(
+    List<LinkItem> links,
+    String filePath,
+  ) async {
+    try {
+      if (!await File(filePath).exists()) {
+        return ExportResult.error('File does not exist: $filePath');
+      }
+
+      // Read existing file and merge with Kioju links
+      final existingHtml = await File(filePath).readAsString();
+      final mergedHtml = mergeWithExistingBookmarks(links, existingHtml);
+      await File(filePath).writeAsString(mergedHtml);
+
+      return ExportResult.success(
+        path: filePath,
+        linkCount: links.length,
+        isAutoSaved: false, // This is a direct export, not auto-save
+      );
+    } catch (e) {
+      return ExportResult.error(e.toString());
+    }
+  }
+
+  /// Exports links to browser bookmarks with a preferred file path
+  Future<ExportResult> exportToBrowserWithPreferredPath(
+    List<LinkItem> links,
+    String? preferredPath,
+  ) async {
     try {
       final autoSave = await AppSettings.getAutoSaveExport();
       final lastPath = await AppSettings.getLastExportPath();
 
-      final html = exportToNetscapeHtml(links);
+      // Only auto-save if the setting is enabled
+      String? targetPath;
+      bool isAutoSaved = false;
 
-      if (autoSave && lastPath != null && await File(lastPath).exists()) {
-        // Auto-save to the last used file
-        await File(lastPath).writeAsString(html);
+      if (autoSave) {
+        // Priority: 1) preferredPath (currently loaded file), 2) lastPath
+        if (preferredPath != null && await File(preferredPath).exists()) {
+          targetPath = preferredPath;
+          isAutoSaved = true;
+        } else if (lastPath != null && await File(lastPath).exists()) {
+          targetPath = lastPath;
+          isAutoSaved = true;
+        }
+      }
+
+      if (targetPath != null) {
+        // Read existing file and merge with Kioju links
+        final existingHtml = await File(targetPath).readAsString();
+        final mergedHtml = mergeWithExistingBookmarks(links, existingHtml);
+        await File(targetPath).writeAsString(mergedHtml);
         return ExportResult.success(
-          path: lastPath,
+          path: targetPath,
           linkCount: links.length,
-          isAutoSaved: true,
+          isAutoSaved: isAutoSaved,
         );
       } else {
         // Ask user for save location
-        final file = await getSaveLocation(suggestedName: 'bookmarks.html');
+        final suggestedName =
+            preferredPath != null
+                ? preferredPath.split('/').last.split('\\').last
+                : 'bookmarks.html';
+        final file = await getSaveLocation(suggestedName: suggestedName);
         if (file != null) {
-          await File(file.path).writeAsString(html);
+          // Check if user chose the same file as currently loaded (merge) or new file (replace)
+          final shouldMerge =
+              preferredPath != null && file.path == preferredPath;
+
+          if (shouldMerge) {
+            // Merge with existing bookmarks
+            final existingHtml = await File(file.path).readAsString();
+            final mergedHtml = mergeWithExistingBookmarks(links, existingHtml);
+            await File(file.path).writeAsString(mergedHtml);
+          } else {
+            // Create new file with just Kioju links
+            final html = exportToNetscapeHtml(links);
+            await File(file.path).writeAsString(html);
+          }
 
           // Remember this path for future auto-saves
           await AppSettings.setLastExportPath(file.path);

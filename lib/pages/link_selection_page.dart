@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../db.dart';
 import '../models/link.dart';
-import '../utils/bookmark_export.dart';
 import '../utils/bookmark_import.dart';
 import '../services/link_service.dart';
 import '../services/import_export_service.dart';

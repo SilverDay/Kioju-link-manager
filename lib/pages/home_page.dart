@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,7 +9,6 @@ import '../services/kioju_api.dart';
 import '../services/sync_settings.dart';
 import '../services/link_service.dart';
 
-import '../utils/bookmark_import.dart';
 import '../widgets/add_link_dialog.dart';
 import '../widgets/bulk_operations_dialog.dart';
 import '../widgets/collection_tree_widget.dart';
@@ -21,7 +18,6 @@ import '../widgets/edit_collection_dialog.dart';
 import '../widgets/enhanced_search_bar.dart';
 import '../widgets/sync_conflict_dialog.dart';
 import 'browser_sync_page.dart';
-import 'link_selection_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {

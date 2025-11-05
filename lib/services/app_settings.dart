@@ -3,13 +3,13 @@ import '../constants/app_constants.dart';
 
 class AppSettings {
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
-    aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: const IOSOptions(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
-    lOptions: const LinuxOptions(),
-    wOptions: const WindowsOptions(),
-    mOptions: const MacOsOptions(
+    lOptions: LinuxOptions(),
+    wOptions: WindowsOptions(),
+    mOptions: MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
       groupId: AppConstants.macosKeychainAccessGroup,
     ),

@@ -51,16 +51,16 @@ class ApiException implements Exception {
 
 class KiojuApi {
   static const _storage = FlutterSecureStorage(
-    aOptions: const AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: const IOSOptions(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
-    mOptions: const MacOsOptions(
+    mOptions: MacOsOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
       groupId: AppConstants.macosKeychainAccessGroup,
     ),
-    wOptions: const WindowsOptions(),
-    lOptions: const LinuxOptions(),
+    wOptions: WindowsOptions(),
+    lOptions: LinuxOptions(),
   );
   static const _tokenKey = 'api_token';
   static const _configTokenKey = 'api_token'; // Key for config table fallback
@@ -86,8 +86,8 @@ class KiojuApi {
         'value': token,
       }, conflictAlgorithm: sqflite.ConflictAlgorithm.replace);
     } catch (e) {
-      // Log but don't throw - this is a fallback mechanism
-      print('Warning: Failed to write token to config table: $e');
+      // Failed to write token to config table - this is a fallback mechanism
+      // Silently continue as this is not critical
     }
   }
 
@@ -105,8 +105,7 @@ class KiojuApi {
       }
       return null;
     } catch (e) {
-      // Log but don't throw - this is a fallback mechanism
-      print('Warning: Failed to read token from config table: $e');
+      // Failed to read token from config table - this is a fallback mechanism
       return null;
     }
   }
@@ -117,8 +116,8 @@ class KiojuApi {
       final db = await AppDb.instance();
       await db.delete('config', where: 'key = ?', whereArgs: [_configTokenKey]);
     } catch (e) {
-      // Log but don't throw - this is a fallback mechanism
-      print('Warning: Failed to delete token from config table: $e');
+      // Failed to delete token from config table - this is a fallback mechanism
+      // Silently continue as this is not critical
     }
   }
 
@@ -133,7 +132,7 @@ class KiojuApi {
       try {
         await _storage.delete(key: _tokenKey);
       } catch (e) {
-        print('Warning: Failed to delete token from secure storage: $e');
+        // Failed to delete token from secure storage - continue with fallback
       }
       await _deleteTokenFromConfig();
       return;
@@ -153,9 +152,8 @@ class KiojuApi {
       await _storage.write(key: _tokenKey, value: sanitizedToken);
       keychainSuccess = true;
     } catch (e) {
-      // Log the keychain failure
-      print('Warning: Failed to save token to secure storage (keychain): $e');
-      print('Falling back to config table storage (less secure)');
+      // Failed to save token to secure storage (keychain)
+      // Falling back to config table storage (less secure)
     }
 
     // If keychain fails, use config table as fallback
@@ -191,9 +189,8 @@ class KiojuApi {
         return token;
       }
     } catch (e) {
-      // Log the keychain failure
-      print('Warning: Failed to read token from secure storage (keychain): $e');
-      print('Attempting to read from config table fallback');
+      // Failed to read token from secure storage (keychain)
+      // Attempting to read from config table fallback
     }
 
     // If keychain fails or returns null, try config table as fallback
@@ -203,7 +200,7 @@ class KiojuApi {
         return token;
       }
     } catch (e) {
-      print('Warning: Failed to read token from config table: $e');
+      // Failed to read token from config table fallback
     }
 
     // Both storage methods failed or returned null
