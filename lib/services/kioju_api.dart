@@ -81,11 +81,10 @@ class KiojuApi {
   static Future<void> _writeTokenToConfig(String token) async {
     try {
       final db = await AppDb.instance();
-      await db.insert(
-        'config',
-        {'key': _configTokenKey, 'value': token},
-        conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
-      );
+      await db.insert('config', {
+        'key': _configTokenKey,
+        'value': token,
+      }, conflictAlgorithm: sqflite.ConflictAlgorithm.replace);
     } catch (e) {
       // Log but don't throw - this is a fallback mechanism
       print('Warning: Failed to write token to config table: $e');
@@ -116,11 +115,7 @@ class KiojuApi {
   static Future<void> _deleteTokenFromConfig() async {
     try {
       final db = await AppDb.instance();
-      await db.delete(
-        'config',
-        where: 'key = ?',
-        whereArgs: [_configTokenKey],
-      );
+      await db.delete('config', where: 'key = ?', whereArgs: [_configTokenKey]);
     } catch (e) {
       // Log but don't throw - this is a fallback mechanism
       print('Warning: Failed to delete token from config table: $e');
@@ -155,10 +150,7 @@ class KiojuApi {
     // Try to store in secure storage (keychain) first
     bool keychainSuccess = false;
     try {
-      await _storage.write(
-        key: _tokenKey,
-        value: sanitizedToken,
-      );
+      await _storage.write(key: _tokenKey, value: sanitizedToken);
       keychainSuccess = true;
     } catch (e) {
       // Log the keychain failure
