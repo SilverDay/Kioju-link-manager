@@ -31,8 +31,6 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
     _loadKiojuLinks();
   }
 
-
-
   /// Reload the current bookmark file
   Future<void> _reloadBookmarkFile() async {
     if (!_browserSyncService.hasLoadedBookmarks) return;
@@ -232,6 +230,63 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
     }
   }
 
+  Future<void> _saveAllToBrowser() async {
+    if (_kiojuLinks.isEmpty) return;
+
+    setState(() {
+      _isLoading = true;
+      _loadingMessage = 'Saving all links to browser...';
+    });
+
+    try {
+      final exportService = ImportExportService();
+      final result = await exportService.exportToBrowser(_kiojuLinks);
+
+      if (result.success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    result.isAutoSaved ? Icons.save_alt : Icons.save,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(result.message)),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else if (result.error != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Save failed: ${result.error}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Save failed: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _exportSelectedToBrowser() async {
     if (_selectedKiojuLinks.isEmpty) return;
 
@@ -332,6 +387,56 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
               )
               : Column(
                 children: [
+                  // Status bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outline.withValues(alpha: 0.1),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _browserSyncService.hasLoadedBookmarks
+                              ? 'Browser: ${_browserSyncService.browserBookmarks.length} bookmarks loaded'
+                              : 'Browser: No bookmark file loaded',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Text(
+                          'Kioju: ${_kiojuLinks.length} links',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                   // Action buttons
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -357,7 +462,7 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                           ),
                         ),
 
-                        // Reload button (if file is loaded)
+                        // Reload and clear buttons (if file is loaded)
                         if (_browserSyncService.hasLoadedBookmarks) ...[
                           const SizedBox(width: 8),
                           IconButton(
@@ -365,10 +470,27 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                             icon: const Icon(Icons.refresh),
                             tooltip: 'Reload bookmark file',
                           ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _browserSyncService.clearLoadedBookmarks();
+                                _selectedBrowserBookmarks.clear();
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Bookmark file cleared'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.clear),
+                            tooltip: 'Clear bookmark file',
+                          ),
                         ],
 
-                        const SizedBox(width: 16),
-                        // Sync actions
+                        const Spacer(),
+
+                        // Import actions (Browser → Kioju)
                         if (_selectedBrowserBookmarks.isNotEmpty) ...[
                           ElevatedButton.icon(
                             onPressed: _syncSelectedToKioju,
@@ -385,12 +507,31 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                           ),
                           const SizedBox(width: 8),
                         ],
+
+                        // Export actions (Kioju → Browser)
+                        if (_kiojuLinks.isNotEmpty) ...[
+                          // Save All button (always available)
+                          ElevatedButton.icon(
+                            onPressed: _saveAllToBrowser,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Save All to Browser'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.tertiary,
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.onTertiary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+
+                        // Save Selected button (when items are selected)
                         if (_selectedKiojuLinks.isNotEmpty) ...[
                           ElevatedButton.icon(
                             onPressed: _exportSelectedToBrowser,
-                            icon: const Icon(Icons.arrow_back),
+                            icon: const Icon(Icons.save_alt),
                             label: Text(
-                              'Export ${_selectedKiojuLinks.length} to Browser',
+                              'Save ${_selectedKiojuLinks.length} Selected',
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor:
