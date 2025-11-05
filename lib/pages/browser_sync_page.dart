@@ -1,11 +1,9 @@
-import 'dart:convert';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import '../db.dart';
 import '../models/link.dart';
-import '../utils/bookmark_import.dart';
 import '../services/link_service.dart';
 import '../services/import_export_service.dart';
+import '../services/browser_sync_service.dart';
 
 class BrowserSyncPage extends StatefulWidget {
   const BrowserSyncPage({super.key});
@@ -15,10 +13,11 @@ class BrowserSyncPage extends StatefulWidget {
 }
 
 class _BrowserSyncPageState extends State<BrowserSyncPage> {
+  // Services
+  final BrowserSyncService _browserSyncService = BrowserSyncService();
+
   // State management
-  List<ImportedBookmark> _browserBookmarks = [];
   List<LinkItem> _kiojuLinks = [];
-  String? _loadedBookmarkFile;
   bool _isLoading = false;
   String _loadingMessage = '';
 
@@ -30,6 +29,59 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
   void initState() {
     super.initState();
     _loadKiojuLinks();
+  }
+
+
+
+  /// Reload the current bookmark file
+  Future<void> _reloadBookmarkFile() async {
+    if (!_browserSyncService.hasLoadedBookmarks) return;
+
+    setState(() {
+      _isLoading = true;
+      _loadingMessage = 'Reloading bookmark file...';
+    });
+
+    try {
+      final result = await _browserSyncService.reloadCurrentFile();
+
+      if (result.success) {
+        setState(() {
+          _selectedBrowserBookmarks.clear();
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Reloaded ${result.bookmarks!.length} bookmarks'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.error ?? 'Failed to reload'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to reload: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadKiojuLinks() async {
@@ -59,54 +111,38 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
   }
 
   Future<void> _loadBookmarkFile() async {
-    final typeGroup = XTypeGroup(
-      label: 'Bookmarks',
-      extensions: ['html', 'json'],
-    );
-    final xfile = await openFile(acceptedTypeGroups: [typeGroup]);
-    if (xfile == null) return;
-
     setState(() {
       _isLoading = true;
       _loadingMessage = 'Loading bookmark file...';
     });
 
     try {
-      final path = xfile.path;
-      final text = await xfile.readAsString();
+      final result = await _browserSyncService.loadBookmarkFile();
 
-      ImportResult importResult;
-      if (path.endsWith('.html') ||
-          text.startsWith('<!DOCTYPE NETSCAPE-Bookmark-file-1>')) {
-        importResult = await importFromNetscapeHtml(
-          text,
-          createCollections: false,
-        );
-      } else if (path.endsWith('.json')) {
-        importResult = await importFromChromeJson(
-          jsonDecode(text),
-          createCollections: false,
-        );
-      } else {
-        throw Exception('Unsupported file format');
-      }
+      if (result.success) {
+        setState(() {
+          _selectedBrowserBookmarks.clear();
+        });
 
-      setState(() {
-        _browserBookmarks = importResult.bookmarks;
-        _loadedBookmarkFile = path.split('/').last;
-        _selectedBrowserBookmarks.clear();
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Loaded ${_browserBookmarks.length} bookmarks from $_loadedBookmarkFile',
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.message),
+              backgroundColor: Colors.green,
             ),
-            backgroundColor: Colors.green,
-          ),
-        );
+          );
+        }
+      } else if (result.error != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load bookmark file: ${result.error}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
       }
+      // If cancelled (result.success == false && result.error == null), do nothing
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -137,7 +173,7 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
       final errors = <String>[];
 
       for (final bookmarkUrl in _selectedBrowserBookmarks) {
-        final bookmark = _browserBookmarks.firstWhere(
+        final bookmark = _browserSyncService.browserBookmarks.firstWhere(
           (b) => b.url == bookmarkUrl,
         );
 
@@ -316,9 +352,21 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                           onPressed: _loadBookmarkFile,
                           icon: const Icon(Icons.file_open),
                           label: Text(
-                            _loadedBookmarkFile ?? 'Load Bookmark File',
+                            _browserSyncService.loadedBookmarkFile ??
+                                'Load Bookmark File',
                           ),
                         ),
+
+                        // Reload button (if file is loaded)
+                        if (_browserSyncService.hasLoadedBookmarks) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: _reloadBookmarkFile,
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Reload bookmark file',
+                          ),
+                        ],
+
                         const SizedBox(width: 16),
                         // Sync actions
                         if (_selectedBrowserBookmarks.isNotEmpty) ...[
@@ -396,9 +444,9 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const Spacer(),
-              if (_browserBookmarks.isNotEmpty) ...[
+              if (_browserSyncService.hasLoadedBookmarks) ...[
                 Text(
-                  '${_browserBookmarks.length} bookmarks',
+                  '${_browserSyncService.browserBookmarks.length} bookmarks',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(width: 8),
@@ -406,18 +454,21 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                   onPressed: () {
                     setState(() {
                       if (_selectedBrowserBookmarks.length ==
-                          _browserBookmarks.length) {
+                          _browserSyncService.browserBookmarks.length) {
                         _selectedBrowserBookmarks.clear();
                       } else {
                         _selectedBrowserBookmarks.clear();
                         _selectedBrowserBookmarks.addAll(
-                          _browserBookmarks.map((b) => b.url),
+                          _browserSyncService.browserBookmarks.map(
+                            (b) => b.url,
+                          ),
                         );
                       }
                     });
                   },
                   child: Text(
-                    _selectedBrowserBookmarks.length == _browserBookmarks.length
+                    _selectedBrowserBookmarks.length ==
+                            _browserSyncService.browserBookmarks.length
                         ? 'Deselect All'
                         : 'Select All',
                   ),
@@ -429,7 +480,7 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
         // Content
         Expanded(
           child:
-              _browserBookmarks.isEmpty
+              !_browserSyncService.hasLoadedBookmarks
                   ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -463,9 +514,10 @@ class _BrowserSyncPageState extends State<BrowserSyncPage> {
                     ),
                   )
                   : ListView.builder(
-                    itemCount: _browserBookmarks.length,
+                    itemCount: _browserSyncService.browserBookmarks.length,
                     itemBuilder: (context, index) {
-                      final bookmark = _browserBookmarks[index];
+                      final bookmark =
+                          _browserSyncService.browserBookmarks[index];
                       final isSelected = _selectedBrowserBookmarks.contains(
                         bookmark.url,
                       );
